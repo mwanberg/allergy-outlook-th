@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { rateLimiter } from "@/lib/rate-limiter"
 
 // Input validation
 function validateGeocodingInput(query: string): { isValid: boolean; error?: string } {
@@ -33,6 +34,36 @@ export async function POST(request: NextRequest) {
       "Access-Control-Allow-Headers": "Content-Type",
     }
 
+    // ============= SERVER-SIDE RATE LIMITING =============
+    const rateLimit = await rateLimiter.checkRateLimit(
+      request,
+      "geocode",
+      10, // 10 requests per user per day
+      200, // 200 total requests per day across all users
+    )
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: rateLimit.error,
+          rateLimitInfo: {
+            limit: rateLimit.limit,
+            remaining: rateLimit.remaining,
+            reset: rateLimit.reset,
+          },
+        },
+        {
+          status: 429,
+          headers: {
+            ...headers,
+            "X-RateLimit-Limit": rateLimit.limit.toString(),
+            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+            "X-RateLimit-Reset": rateLimit.reset.toString(),
+          },
+        },
+      )
+    }
+
     const body = await request.json()
     const { query } = body
 
@@ -53,7 +84,14 @@ export async function POST(request: NextRequest) {
         {
           suggestions: [{ name: query + " (preview)", lat: 0, lng: 0 }],
         },
-        { headers },
+        {
+          headers: {
+            ...headers,
+            "X-RateLimit-Limit": rateLimit.limit.toString(),
+            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+            "X-RateLimit-Reset": rateLimit.reset.toString(),
+          },
+        },
       )
     }
 
@@ -95,13 +133,30 @@ export async function POST(request: NextRequest) {
             suggestions: [{ name: query + " (preview)", lat: 0, lng: 0 }],
             warning: data.error_message ?? data.status,
           },
-          { headers },
+          {
+            headers: {
+              ...headers,
+              "X-RateLimit-Limit": rateLimit.limit.toString(),
+              "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+              "X-RateLimit-Reset": rateLimit.reset.toString(),
+            },
+          },
         )
       }
 
       // ZERO_RESULTS is a normal case – just return empty list.
       if (data.status === "ZERO_RESULTS") {
-        return NextResponse.json({ suggestions: [] }, { headers })
+        return NextResponse.json(
+          { suggestions: [] },
+          {
+            headers: {
+              ...headers,
+              "X-RateLimit-Limit": rateLimit.limit.toString(),
+              "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+              "X-RateLimit-Reset": rateLimit.reset.toString(),
+            },
+          },
+        )
       }
 
       // Any other unexpected status → error
@@ -116,7 +171,17 @@ export async function POST(request: NextRequest) {
         lng: result.geometry.location.lng,
       })) || []
 
-    return NextResponse.json({ suggestions }, { headers })
+    return NextResponse.json(
+      { suggestions },
+      {
+        headers: {
+          ...headers,
+          "X-RateLimit-Limit": rateLimit.limit.toString(),
+          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+          "X-RateLimit-Reset": rateLimit.reset.toString(),
+        },
+      },
+    )
   } catch (error) {
     console.error("Geocoding error:", error)
     return NextResponse.json({ error: "Failed to search locations" }, { status: 500 })

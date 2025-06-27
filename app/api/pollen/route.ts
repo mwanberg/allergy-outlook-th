@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { rateLimiter } from "@/lib/rate-limiter"
 
 // Input validation for coordinates
 function validateCoordinates(lat: number, lng: number): { isValid: boolean; error?: string } {
@@ -170,6 +171,36 @@ export async function POST(request: NextRequest) {
       "Access-Control-Allow-Headers": "Content-Type",
     }
 
+    // ============= SERVER-SIDE RATE LIMITING =============
+    const rateLimit = await rateLimiter.checkRateLimit(
+      request,
+      "pollen",
+      5, // 5 requests per user per day
+      100, // 100 total requests per day across all users
+    )
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: rateLimit.error,
+          rateLimitInfo: {
+            limit: rateLimit.limit,
+            remaining: rateLimit.remaining,
+            reset: rateLimit.reset,
+          },
+        },
+        {
+          status: 429,
+          headers: {
+            ...headers,
+            "X-RateLimit-Limit": rateLimit.limit.toString(),
+            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+            "X-RateLimit-Reset": rateLimit.reset.toString(),
+          },
+        },
+      )
+    }
+
     const body = await request.json()
     const { lat, lng } = body
 
@@ -185,7 +216,14 @@ export async function POST(request: NextRequest) {
     if (!apiKey) {
       // In local/preview we don't have real secrets; respond with mock data
       console.warn("GOOGLE_MAPS_API_KEY missing – returning mock pollen data so the preview keeps working.")
-      return NextResponse.json(getMockPollenData(), { headers })
+      return NextResponse.json(getMockPollenData(), {
+        headers: {
+          ...headers,
+          "X-RateLimit-Limit": rateLimit.limit.toString(),
+          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+          "X-RateLimit-Reset": rateLimit.reset.toString(),
+        },
+      })
     }
 
     // Make request to Google Maps Pollen API
@@ -216,7 +254,14 @@ export async function POST(request: NextRequest) {
         "Google Pollen API returned 404 – API may be disabled or not whitelisted. " +
           "Returning mock data so the preview keeps working.",
       )
-      return NextResponse.json(getMockPollenData(), { headers })
+      return NextResponse.json(getMockPollenData(), {
+        headers: {
+          ...headers,
+          "X-RateLimit-Limit": rateLimit.limit.toString(),
+          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+          "X-RateLimit-Reset": rateLimit.reset.toString(),
+        },
+      })
     }
 
     /* ------------------------------------------------------------------ */
@@ -226,7 +271,7 @@ export async function POST(request: NextRequest) {
 
       if (response.status === 429) {
         return NextResponse.json(
-          { error: "Daily API limit reached. Please try again tomorrow." },
+          { error: "Google API limit reached. Please try again tomorrow." },
           { status: 429, headers },
         )
       }
@@ -236,7 +281,14 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json()
 
-    return NextResponse.json(data, { headers })
+    return NextResponse.json(data, {
+      headers: {
+        ...headers,
+        "X-RateLimit-Limit": rateLimit.limit.toString(),
+        "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+        "X-RateLimit-Reset": rateLimit.reset.toString(),
+      },
+    })
   } catch (error) {
     console.error("Pollen API error:", error)
     return NextResponse.json({ error: "Failed to fetch pollen data" }, { status: 500 })
