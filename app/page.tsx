@@ -10,6 +10,7 @@ import { PollenAccordion } from "@/components/pollen-accordion"
 import { processPollenData, formatUPI } from "@/lib/pollen-utils"
 import { locationCache, type CachedLocation } from "@/lib/location-cache"
 import Link from "next/link"
+import { LocationHistory } from "@/components/location-history"
 
 export default function AirQualityApp() {
   const [currentLocation, setCurrentLocation] = useState<CachedLocation | null>(null)
@@ -25,18 +26,20 @@ export default function AirQualityApp() {
   const [isGettingLocation, setIsGettingLocation] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
 
+  const [recentLocations, setRecentLocations] = useState<CachedLocation[]>([])
+
   // Load cached location on mount
   useEffect(() => {
-    const cachedLocations = locationCache.getAllCachedLocations()
-    if (cachedLocations.length > 0) {
-      // Use the most recently updated location
-      const mostRecent = cachedLocations.sort(
-        (a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime(),
-      )[0]
+    // Load recent locations
+    const recent = locationCache.getRecentLocations()
+    setRecentLocations(recent)
+
+    // Get the most recent location with pollen data
+    const mostRecent = locationCache.getMostRecentLocation()
+    if (mostRecent && mostRecent.pollenData) {
       setCurrentLocation(mostRecent)
-      if (mostRecent.pollenData) {
-        setPollenApiData(mostRecent.pollenData)
-      }
+      setPollenApiData(mostRecent.pollenData)
+      setDataSource("cache")
     }
 
     // Clean up expired cache
@@ -82,6 +85,13 @@ export default function AirQualityApp() {
 
       // Update cache with pollen data
       locationCache.updatePollenData(lat, lng, data)
+
+      // Get the updated location with pollen data and add to recent locations
+      const updatedLocation = locationCache.getCachedLocation(lat, lng)
+      if (updatedLocation) {
+        locationCache.addToRecentLocations(updatedLocation)
+        setRecentLocations(locationCache.getRecentLocations())
+      }
     } catch (err) {
       console.error("Failed to load pollen data:", err)
       setError(err instanceof Error ? err.message : "Failed to load pollen data")
@@ -205,11 +215,32 @@ export default function AirQualityApp() {
     setSuggestions([]) // Clear search results
     setSearchValue("") // Clear search input
 
-    // Cache the location
-    locationCache.setCachedLocation(newLocation)
+    // Check if we have cached pollen data for this location
+    const cachedLocation = locationCache.getLocationWithPollenData(location.lat, location.lng)
+    if (cachedLocation && cachedLocation.pollenData) {
+      // Use cached data
+      setPollenApiData(cachedLocation.pollenData)
+      setDataSource("cache")
+      setCurrentLocation(cachedLocation)
 
-    // Load pollen data
-    loadPollenData(location.lat, location.lng)
+      // Update recent locations
+      locationCache.addToRecentLocations(cachedLocation)
+      setRecentLocations(locationCache.getRecentLocations())
+    } else {
+      // Cache the location and load fresh pollen data
+      locationCache.setCachedLocation(newLocation)
+      loadPollenData(location.lat, location.lng)
+    }
+  }
+
+  const handleRecentLocationSelect = (location: CachedLocation) => {
+    setCurrentLocation(location)
+    setPollenApiData(location.pollenData)
+    setDataSource("cache")
+
+    // Move to front of recent locations
+    locationCache.addToRecentLocations(location)
+    setRecentLocations(locationCache.getRecentLocations())
   }
 
   const getPollenLevelColor = (level: string) => {
@@ -440,6 +471,15 @@ export default function AirQualityApp() {
               <p className="text-gray-600 text-sm mt-3">Today's pollen levels for your area</p>
             </CardContent>
           </Card>
+        )}
+
+        {/* Location History */}
+        {recentLocations.length > 0 && (
+          <LocationHistory
+            recentLocations={recentLocations}
+            currentLocation={currentLocation}
+            onLocationSelect={handleRecentLocationSelect}
+          />
         )}
 
         {/* Pollen Breakdown with Accordions */}
