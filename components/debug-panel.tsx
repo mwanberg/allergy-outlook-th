@@ -5,18 +5,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Bug, MapPin, Flower2, ExternalLink, Info } from "lucide-react"
+import { Bug, MapPin, Flower2, ExternalLink, Info, TestTube } from "lucide-react"
 
 export function DebugPanel() {
-  const [pollenLat, setPollenLat] = useState("37.7749")
-  const [pollenLng, setPollenLng] = useState("-122.4194")
-  const [geocodeQuery, setGeocodeQuery] = useState("San Francisco, CA")
+  const [pollenLat, setPollenLat] = useState("45.2629000")
+  const [pollenLng, setPollenLng] = useState("-122.6925900")
+  const [geocodeQuery, setGeocodeQuery] = useState("Portland, OR")
   const [pollenResult, setPollenResult] = useState<any>(null)
   const [geocodeResult, setGeocodeResult] = useState<any>(null)
   const [isTestingPollen, setIsTestingPollen] = useState(false)
   const [isTestingGeocode, setIsTestingGeocode] = useState(false)
 
-  const testPollenAPI = async () => {
+  const testPollenAPI = async (useMockData = false) => {
     setIsTestingPollen(true)
     try {
       const response = await fetch("/api/debug-pollen", {
@@ -25,6 +25,7 @@ export function DebugPanel() {
         body: JSON.stringify({
           lat: Number.parseFloat(pollenLat),
           lng: Number.parseFloat(pollenLng),
+          useMockData,
         }),
       })
       const data = await response.json()
@@ -59,82 +60,39 @@ export function DebugPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Pollen API Status */}
-      <Card className="border-amber-200 bg-amber-50">
+      {/* API Configuration Status */}
+      <Card className="border-blue-200 bg-blue-50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-amber-800">
+          <CardTitle className="flex items-center gap-2 text-blue-800">
             <Info className="w-5 h-5" />
-            Google Pollen API Status
+            Google Pollen API Configuration
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="bg-white rounded-lg p-4 border border-amber-200">
-            <h3 className="font-semibold text-amber-800 mb-2">Current Status: Not Publicly Available</h3>
+          <div className="bg-white rounded-lg p-4 border border-blue-200">
+            <h3 className="font-semibold text-blue-800 mb-2">Current Implementation</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                <span className="text-gray-700">Google Pollen API: Returns 404 (Not Found)</span>
+              <div className="bg-gray-50 p-3 rounded font-mono text-xs">
+                <div className="text-green-600">✓ Method: GET (as per documentation)</div>
+                <div className="text-green-600">✓ URL: https://pollen.googleapis.com/v1/forecast:lookup</div>
+                <div className="text-green-600">✓ Parameters: key, location.latitude, location.longitude, days</div>
+                <div className="text-green-600">✓ Headers: User-Agent, Accept: application/json</div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-gray-700">Google Geocoding API: Working ✓</span>
-              </div>
-              <p className="text-amber-700 bg-amber-100 p-3 rounded-lg mt-3">
-                <strong>Good news:</strong> The app automatically falls back to seasonal pollen estimates when the
-                Google Pollen API isn't available. Your users will still get useful pollen information!
+              <p className="text-blue-700 bg-blue-100 p-3 rounded-lg">
+                <strong>Implementation matches Google's documentation exactly.</strong> If this still returns errors,
+                the API may require special access or have geographic restrictions.
               </p>
             </div>
           </div>
 
-          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <h3 className="font-semibold text-blue-800 mb-2">About the Google Pollen API</h3>
-            <div className="space-y-2 text-sm text-blue-700">
-              <p>The Google Pollen API appears to be:</p>
-              <ul className="list-disc list-inside ml-4 space-y-1">
-                <li>Still in development or limited beta</li>
-                <li>Not yet publicly available</li>
-                <li>May require special access or whitelisting</li>
-                <li>Could have geographic restrictions</li>
-              </ul>
-              <p className="mt-3">
-                <strong>Our solution:</strong> We've implemented intelligent seasonal fallback data that provides
-                realistic pollen estimates based on location and time of year.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-            <h3 className="font-semibold text-green-800 mb-2">Alternative Data Sources</h3>
-            <div className="space-y-2 text-sm text-green-700">
-              <p>Consider these alternatives for real pollen data:</p>
-              <div className="grid grid-cols-1 gap-2 mt-2">
-                <a
-                  href="https://www.airnow.gov/developers/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>AirNow API (EPA) - Air Quality Data</span>
-                </a>
-                <a
-                  href="https://openweathermap.org/api/air-pollution"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>OpenWeatherMap - Air Pollution API</span>
-                </a>
-                <a
-                  href="https://www.weatherapi.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>WeatherAPI - Includes pollen data</span>
-                </a>
+          <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+            <h3 className="font-semibold text-amber-800 mb-2">Test Coordinates</h3>
+            <div className="space-y-2 text-sm text-amber-700">
+              <p>Using Portland, OR coordinates from Google's documentation examples:</p>
+              <div className="font-mono text-xs bg-white p-2 rounded border">
+                Latitude: 45.2629000
+                <br />
+                Longitude: -122.6925900
               </div>
             </div>
           </div>
@@ -153,24 +111,35 @@ export function DebugPanel() {
           <div className="space-y-3">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <Flower2 className="w-4 h-4" />
-              Test Pollen API (Expected to fail with 404)
+              Test Google Pollen API
             </h3>
             <div className="grid grid-cols-2 gap-2">
               <Input placeholder="Latitude" value={pollenLat} onChange={(e) => setPollenLat(e.target.value)} />
               <Input placeholder="Longitude" value={pollenLng} onChange={(e) => setPollenLng(e.target.value)} />
             </div>
-            <Button onClick={testPollenAPI} disabled={isTestingPollen} className="w-full">
-              {isTestingPollen ? "Testing..." : "Test Pollen API"}
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => testPollenAPI(false)} disabled={isTestingPollen} className="flex-1">
+                {isTestingPollen ? "Testing..." : "Test Real API"}
+              </Button>
+              <Button
+                onClick={() => testPollenAPI(true)}
+                disabled={isTestingPollen}
+                variant="outline"
+                className="flex-1"
+              >
+                <TestTube className="w-4 h-4 mr-2" />
+                Test Mock Data
+              </Button>
+            </div>
 
             {pollenResult && (
               <div className="bg-white rounded-lg p-4 border">
                 <div className="flex items-center gap-2 mb-2">
                   <Badge variant={pollenResult.success ? "default" : "destructive"}>
-                    {pollenResult.success ? "Success" : "Expected Error"}
+                    {pollenResult.success ? "Success" : "Error"}
                   </Badge>
                   {pollenResult.debug?.status && <Badge variant="outline">Status: {pollenResult.debug.status}</Badge>}
-                  {pollenResult.debug?.status === 404 && <Badge variant="secondary">API Not Available</Badge>}
+                  {pollenResult.debug?.mockData && <Badge variant="secondary">Mock Data</Badge>}
                 </div>
                 <pre className="text-xs bg-gray-50 p-3 rounded overflow-auto max-h-64">{formatJSON(pollenResult)}</pre>
               </div>
@@ -181,10 +150,10 @@ export function DebugPanel() {
           <div className="space-y-3">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <MapPin className="w-4 h-4" />
-              Test Geocoding API (Should work)
+              Test Geocoding API
             </h3>
             <Input
-              placeholder="Search query (e.g., San Francisco, CA)"
+              placeholder="Search query (e.g., Portland, OR)"
               value={geocodeQuery}
               onChange={(e) => setGeocodeQuery(e.target.value)}
             />
@@ -203,6 +172,42 @@ export function DebugPanel() {
                 <pre className="text-xs bg-gray-50 p-3 rounded overflow-auto max-h-64">{formatJSON(geocodeResult)}</pre>
               </div>
             )}
+          </div>
+
+          {/* API Documentation Links */}
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <h3 className="font-semibold text-green-800 mb-2">Google API Documentation</h3>
+            <div className="space-y-2 text-sm text-green-700">
+              <div className="grid grid-cols-1 gap-2">
+                <a
+                  href="https://developers.google.com/maps/documentation/pollen/overview"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Pollen API Documentation</span>
+                </a>
+                <a
+                  href="https://developers.google.com/maps/documentation/pollen/reference/rest"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Pollen API REST Reference</span>
+                </a>
+                <a
+                  href="https://console.cloud.google.com/apis/library/pollen.googleapis.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Enable Pollen API in Console</span>
+                </a>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -18,282 +18,6 @@ function validateCoordinates(lat: number, lng: number): { isValid: boolean; erro
   return { isValid: true }
 }
 
-// Enhanced mock data generator based on location and season
-const getMockPollenData = (lat: number, lng: number) => {
-  const now = new Date()
-  const month = now.getMonth() + 1 // 1-12
-  const isNorthernHemisphere = lat > 0
-
-  // Seasonal adjustments
-  let treeLevel = 0
-  let grassLevel = 0
-  let weedLevel = 0
-
-  if (isNorthernHemisphere) {
-    // Northern hemisphere seasons
-    if (month >= 3 && month <= 5) {
-      // Spring - high tree pollen
-      treeLevel = Math.random() * 3 + 1 // 1-4
-      grassLevel = Math.random() * 1.5 // 0-1.5
-      weedLevel = Math.random() * 0.5 // 0-0.5
-    } else if (month >= 6 && month <= 8) {
-      // Summer - high grass pollen
-      treeLevel = Math.random() * 1 // 0-1
-      grassLevel = Math.random() * 3 + 1 // 1-4
-      weedLevel = Math.random() * 1.5 // 0-1.5
-    } else if (month >= 9 && month <= 11) {
-      // Fall - high weed pollen
-      treeLevel = Math.random() * 0.5 // 0-0.5
-      grassLevel = Math.random() * 1 // 0-1
-      weedLevel = Math.random() * 3 + 1 // 1-4
-    } else {
-      // Winter - low everything
-      treeLevel = Math.random() * 0.5 // 0-0.5
-      grassLevel = Math.random() * 0.5 // 0-0.5
-      weedLevel = Math.random() * 0.5 // 0-0.5
-    }
-  } else {
-    // Southern hemisphere - reverse seasons
-    if (month >= 9 && month <= 11) {
-      // Spring
-      treeLevel = Math.random() * 3 + 1
-      grassLevel = Math.random() * 1.5
-      weedLevel = Math.random() * 0.5
-    } else if (month >= 12 || month <= 2) {
-      // Summer
-      treeLevel = Math.random() * 1
-      grassLevel = Math.random() * 3 + 1
-      weedLevel = Math.random() * 1.5
-    } else if (month >= 3 && month <= 5) {
-      // Fall
-      treeLevel = Math.random() * 0.5
-      grassLevel = Math.random() * 1
-      weedLevel = Math.random() * 3 + 1
-    } else {
-      // Winter
-      treeLevel = Math.random() * 0.5
-      grassLevel = Math.random() * 0.5
-      weedLevel = Math.random() * 0.5
-    }
-  }
-
-  // Round to 1 decimal place
-  treeLevel = Math.round(treeLevel * 10) / 10
-  grassLevel = Math.round(grassLevel * 10) / 10
-  weedLevel = Math.round(weedLevel * 10) / 10
-
-  const getCategory = (level: number) => {
-    if (level === 0) return "None"
-    if (level <= 1.0) return "Very Low"
-    if (level <= 2.0) return "Low"
-    if (level <= 3.0) return "Moderate"
-    if (level <= 4.0) return "High"
-    return "Very High"
-  }
-
-  const getColor = (category: string) => {
-    switch (category) {
-      case "None":
-        return { red: 0.5, green: 0.5, blue: 0.5 }
-      case "Very Low":
-        return { red: 0.2, green: 0.6, blue: 0.9 }
-      case "Low":
-        return { red: 0.5176471, green: 0.8117647, blue: 0.2 }
-      case "Moderate":
-        return { red: 1.0, green: 0.8, blue: 0.0 }
-      case "High":
-        return { red: 1.0, green: 0.5, blue: 0.0 }
-      case "Very High":
-        return { red: 1.0, green: 0.2, blue: 0.2 }
-      default:
-        return { red: 0.5, green: 0.5, blue: 0.5 }
-    }
-  }
-
-  const treeCategory = getCategory(treeLevel)
-  const grassCategory = getCategory(grassLevel)
-  const weedCategory = getCategory(weedLevel)
-
-  return {
-    regionCode: "US",
-    dailyInfo: [
-      {
-        date: {
-          year: now.getFullYear(),
-          month: now.getMonth() + 1,
-          day: now.getDate(),
-        },
-        pollenTypeInfo: [
-          {
-            code: "TREE",
-            displayName: "Tree",
-            inSeason: treeLevel > 1.0,
-            indexInfo: {
-              code: "UPI",
-              displayName: "Universal Pollen Index",
-              value: treeLevel,
-              category: treeCategory,
-              indexDescription:
-                treeLevel === 0
-                  ? "No tree pollen detected"
-                  : treeLevel <= 1.0
-                    ? "Very low tree pollen levels"
-                    : treeLevel <= 2.0
-                      ? "Low tree pollen levels - minimal symptoms expected"
-                      : treeLevel <= 3.0
-                        ? "Moderate tree pollen levels - some people may experience symptoms"
-                        : "High tree pollen levels - many people will experience symptoms",
-              color: getColor(treeCategory),
-            },
-            healthRecommendations:
-              treeLevel === 0
-                ? ["No tree pollen detected today.", "Great weather for outdoor activities!"]
-                : treeLevel <= 1.0
-                  ? ["Tree pollen levels are very low today.", "Good day for outdoor activities."]
-                  : treeLevel <= 2.0
-                    ? [
-                        "Tree pollen levels are low but present.",
-                        "Most people can enjoy outdoor activities without issues.",
-                      ]
-                    : [
-                        "Tree pollen levels are elevated.",
-                        "People with tree pollen allergies should consider taking precautions.",
-                        "Keep windows closed and shower after being outdoors.",
-                      ],
-          },
-          {
-            code: "GRASS",
-            displayName: "Grass",
-            inSeason: grassLevel > 1.0,
-            indexInfo: {
-              code: "UPI",
-              displayName: "Universal Pollen Index",
-              value: grassLevel,
-              category: grassCategory,
-              indexDescription:
-                grassLevel === 0
-                  ? "No grass pollen detected"
-                  : grassLevel <= 1.0
-                    ? "Very low grass pollen levels"
-                    : grassLevel <= 2.0
-                      ? "Low grass pollen levels - minimal symptoms expected"
-                      : grassLevel <= 3.0
-                        ? "Moderate grass pollen levels - some people may experience symptoms"
-                        : "High grass pollen levels - many people will experience symptoms",
-              color: getColor(grassCategory),
-            },
-            healthRecommendations:
-              grassLevel === 0
-                ? ["No grass pollen detected today."]
-                : grassLevel <= 1.0
-                  ? ["Grass pollen levels are very low today.", "Good day for outdoor activities."]
-                  : grassLevel <= 2.0
-                    ? [
-                        "Grass pollen levels are low but present.",
-                        "Most people can enjoy outdoor activities without issues.",
-                      ]
-                    : [
-                        "Grass pollen levels are elevated.",
-                        "People with grass pollen allergies should consider taking precautions.",
-                        "Avoid mowing the lawn or limit time in grassy areas.",
-                      ],
-          },
-          {
-            code: "WEED",
-            displayName: "Weed",
-            inSeason: weedLevel > 1.0,
-            indexInfo: {
-              code: "UPI",
-              displayName: "Universal Pollen Index",
-              value: weedLevel,
-              category: weedCategory,
-              indexDescription:
-                weedLevel === 0
-                  ? "No weed pollen detected"
-                  : weedLevel <= 1.0
-                    ? "Very low weed pollen levels"
-                    : weedLevel <= 2.0
-                      ? "Low weed pollen levels - minimal symptoms expected"
-                      : weedLevel <= 3.0
-                        ? "Moderate weed pollen levels - some people may experience symptoms"
-                        : "High weed pollen levels - many people will experience symptoms",
-              color: getColor(weedCategory),
-            },
-            healthRecommendations:
-              weedLevel === 0
-                ? ["No weed pollen detected today."]
-                : weedLevel <= 1.0
-                  ? ["Weed pollen levels are very low today.", "Good day for outdoor activities."]
-                  : weedLevel <= 2.0
-                    ? [
-                        "Weed pollen levels are low but present.",
-                        "Most people can enjoy outdoor activities without issues.",
-                      ]
-                    : [
-                        "Weed pollen levels are elevated.",
-                        "People with weed pollen allergies should consider taking precautions.",
-                        "Ragweed season may be active - check local forecasts.",
-                      ],
-          },
-        ],
-        plantInfo: [
-          {
-            code: "MAPLE",
-            displayName: "Maple",
-            inSeason: treeLevel > 1.0 && month >= 3 && month <= 5,
-          },
-          {
-            code: "OAK",
-            displayName: "Oak",
-            inSeason: treeLevel > 1.0 && month >= 3 && month <= 5,
-          },
-          {
-            code: "BIRCH",
-            displayName: "Birch",
-            inSeason: treeLevel > 1.0 && month >= 3 && month <= 5,
-          },
-          {
-            code: "GRAMINALES",
-            displayName: "Grasses",
-            inSeason: grassLevel > 1.0,
-            indexInfo: {
-              code: "UPI",
-              displayName: "Universal Pollen Index",
-              value: grassLevel,
-              category: grassCategory,
-              indexDescription:
-                grassLevel <= 1.0
-                  ? "Low grass pollen levels"
-                  : "People with high allergy to pollen are likely to experience symptoms",
-              color: getColor(grassCategory),
-            },
-            plantDescription: {
-              type: "GRASS",
-              family: "Poaceae",
-              season: "Late spring, summer",
-              specialColors: "None",
-              specialShapes: "The leaves are alternate, long and narrow and the leaf margin is smooth.",
-              crossReaction:
-                "Plantain (Plantago) pollen. In addition, there may be a higher risk for food allergies like melons, oranges, tomatoes, peanuts, soy, potato, and other legumes.",
-              picture: "https://storage.googleapis.com/pollen-pictures/graminales_full.jpg",
-              pictureCloseup: "https://storage.googleapis.com/pollen-pictures/graminales_closeup.jpg",
-            },
-          },
-          {
-            code: "RAGWEED",
-            displayName: "Ragweed",
-            inSeason: weedLevel > 1.0 && month >= 8 && month <= 10,
-          },
-        ],
-      },
-    ],
-    _mockData: true,
-    _reason: "Google Pollen API not available",
-    _location: { lat, lng },
-    _generated: now.toISOString(),
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     // CORS headers
@@ -335,7 +59,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { lat, lng } = body
+    const { lat, lng, enableMockData = false } = body
+
+    console.log("🌸 Pollen API request:", { lat, lng, enableMockData })
 
     // Validate input
     const validation = validateCoordinates(lat, lng)
@@ -343,107 +69,121 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400, headers })
     }
 
-    // --------------------------- KEY CHECK & FALLBACK ---------------------------
+    // Check for required environment variable
     const apiKey = process.env.GOOGLE_MAPS_API_KEY
 
     if (!apiKey) {
-      console.warn("GOOGLE_MAPS_API_KEY missing – returning mock pollen data")
-      return NextResponse.json(getMockPollenData(lat, lng), {
-        headers: {
-          ...headers,
-          "X-RateLimit-Limit": rateLimit.limit.toString(),
-          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-          "X-RateLimit-Reset": rateLimit.reset.toString(),
+      console.error("❌ GOOGLE_MAPS_API_KEY is not configured")
+      return NextResponse.json(
+        {
+          error: "Pollen service is temporarily unavailable. We're working on a fix.",
+          technical: "API key not configured",
         },
-      })
+        { status: 503, headers },
+      )
     }
 
-    // Make request to Google Maps Pollen API
-    const googleUrl = "https://pollen.googleapis.com/v1/forecast:lookup"
-    const requestBody = {
-      location: {
-        longitude: lng,
-        latitude: lat,
-      },
-      days: 1,
-      languageCode: "en",
-    }
+    console.log("✅ API Key found, constructing request...")
 
-    console.log("🌸 Attempting Google Pollen API request...")
-
-    const response = await fetch(`${googleUrl}?key=${apiKey}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "AirBuddy/1.0",
-      },
-      body: JSON.stringify(requestBody),
+    // Construct the URL exactly as shown in Google's documentation
+    const baseUrl = "https://pollen.googleapis.com/v1/forecast:lookup"
+    const params = new URLSearchParams({
+      key: apiKey,
+      "location.latitude": lat.toString(),
+      "location.longitude": lng.toString(),
+      days: "1",
     })
 
-    console.log("🌸 Pollen API response status:", response.status)
+    const fullUrl = `${baseUrl}?${params.toString()}`
 
-    /* ------------------------------------------------------------------
-       GRACEFUL 404 HANDLING - POLLEN API NOT AVAILABLE
-       ------------------------------------------------------------------ */
-    if (response.status === 404) {
-      console.warn(
-        "Google Pollen API returned 404 – API may not be publicly available yet. " +
-          "Returning enhanced mock data based on location and season.",
-      )
-      return NextResponse.json(getMockPollenData(lat, lng), {
-        headers: {
-          ...headers,
-          "X-RateLimit-Limit": rateLimit.limit.toString(),
-          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-          "X-RateLimit-Reset": rateLimit.reset.toString(),
-          "X-Pollen-Data-Source": "mock-seasonal",
-        },
-      })
-    }
+    // Log the URL structure (without the actual API key)
+    const safeUrl = fullUrl.replace(apiKey, "API_KEY_HIDDEN")
+    console.log("📤 Request URL structure:", safeUrl)
+    console.log("📤 Request method: GET")
 
-    /* ------------------------------------------------------------------
-       HANDLE OTHER API ERRORS
-       ------------------------------------------------------------------ */
+    const response = await fetch(fullUrl, {
+      method: "GET",
+      headers: {
+        "User-Agent": "AirBuddy/1.0",
+        Accept: "application/json",
+      },
+    })
+
+    console.log("📥 Response status:", response.status)
+    console.log("📥 Response headers:", Object.fromEntries(response.headers.entries()))
+
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error("Google Pollen API error:", response.status, errorText)
+      const responseText = await response.text()
+      console.error("❌ Google Pollen API error:", {
+        status: response.status,
+        statusText: response.statusText,
+        responsePreview: responseText.substring(0, 500),
+      })
 
-      // Check if it's an HTML error page (like 404)
-      if (errorText.includes("<!DOCTYPE html>") || errorText.includes("<html")) {
-        console.warn("Received HTML error page from Pollen API - falling back to mock data")
-        return NextResponse.json(getMockPollenData(lat, lng), {
-          headers: {
-            ...headers,
-            "X-RateLimit-Limit": rateLimit.limit.toString(),
-            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-            "X-RateLimit-Reset": rateLimit.reset.toString(),
-            "X-Pollen-Data-Source": "mock-api-error",
-          },
-        })
+      // Check if it's an HTML error page (404, 403, etc.)
+      if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html")) {
+        console.error("❌ Received HTML error page from Pollen API")
+
+        if (response.status === 404) {
+          return NextResponse.json(
+            {
+              error: "Pollen service is temporarily unavailable. We're working on a fix.",
+              technical: "API endpoint not found (404)",
+            },
+            { status: 503, headers },
+          )
+        }
+
+        if (response.status === 403) {
+          return NextResponse.json(
+            {
+              error: "Pollen service is temporarily unavailable. We're working on a fix.",
+              technical: "API access forbidden (403)",
+            },
+            { status: 503, headers },
+          )
+        }
       }
 
       if (response.status === 429) {
-        return NextResponse.json(
-          { error: "Google API limit reached. Please try again tomorrow." },
-          { status: 429, headers },
-        )
+        return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429, headers })
       }
 
-      // For other errors, also fall back to mock data
-      console.warn("Pollen API error - falling back to mock data")
-      return NextResponse.json(getMockPollenData(lat, lng), {
-        headers: {
-          ...headers,
-          "X-RateLimit-Limit": rateLimit.limit.toString(),
-          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-          "X-RateLimit-Reset": rateLimit.reset.toString(),
-          "X-Pollen-Data-Source": "mock-fallback",
+      // For any other error, return a generic message
+      return NextResponse.json(
+        {
+          error: "Pollen service is temporarily unavailable. We're working on a fix.",
+          technical: `HTTP ${response.status}: ${response.statusText}`,
         },
-      })
+        { status: 503, headers },
+      )
     }
 
-    const data = await response.json()
-    console.log("🌸 Successfully received real pollen data")
+    const responseText = await response.text()
+    console.log("📥 Raw response length:", responseText.length)
+    console.log("📥 Response preview:", responseText.substring(0, 200))
+
+    let data
+    try {
+      data = JSON.parse(responseText)
+      console.log("✅ Successfully parsed JSON response")
+      console.log("📊 Response structure:", {
+        hasRegionCode: !!data.regionCode,
+        hasDailyInfo: !!data.dailyInfo,
+        dailyInfoLength: data.dailyInfo?.length || 0,
+        firstDayPollenTypes: data.dailyInfo?.[0]?.pollenTypeInfo?.length || 0,
+        firstDayPlants: data.dailyInfo?.[0]?.plantInfo?.length || 0,
+      })
+    } catch (parseError) {
+      console.error("❌ Failed to parse JSON response:", parseError)
+      return NextResponse.json(
+        {
+          error: "Pollen service returned invalid data. We're working on a fix.",
+          technical: "JSON parse error",
+        },
+        { status: 503, headers },
+      )
+    }
 
     return NextResponse.json(data, {
       headers: {
@@ -455,18 +195,14 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Pollen API error:", error)
-
-    // Even on error, provide mock data so the app keeps working
-    const body = await request.json().catch(() => ({ lat: 37.7749, lng: -122.4194 }))
-    const { lat = 37.7749, lng = -122.4194 } = body
-
-    return NextResponse.json(getMockPollenData(lat, lng), {
-      status: 200, // Return 200 with mock data instead of 500 error
-      headers: {
-        "X-Pollen-Data-Source": "mock-error-fallback",
+    console.error("🚨 Pollen API error:", error)
+    return NextResponse.json(
+      {
+        error: "Pollen service is temporarily unavailable. We're working on a fix.",
+        technical: error instanceof Error ? error.message : "Unknown error",
       },
-    })
+      { status: 503 },
+    )
   }
 }
 
