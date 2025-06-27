@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, Settings, Wind } from "lucide-react"
+import { MapPin, Settings, Wind, Bug } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PollenAccordion } from "@/components/pollen-accordion"
 import { processPollenData, formatUPI } from "@/lib/pollen-utils"
@@ -160,6 +160,13 @@ export default function AirQualityApp() {
             <Button variant="ghost" size="sm" className="rounded-full">
               <Settings className="w-4 h-4" />
             </Button>
+            {process.env.NODE_ENV === "development" && (
+              <Link href="/debug">
+                <Button variant="ghost" size="sm" className="rounded-full">
+                  <Bug className="w-4 h-4" />
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Error Display */}
