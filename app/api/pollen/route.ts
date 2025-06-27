@@ -29,34 +29,77 @@ export async function POST(request: NextRequest) {
     }
 
     // ============= SERVER-SIDE RATE LIMITING =============
-    const rateLimit = await rateLimiter.checkRateLimit(
-      request,
-      "pollen",
-      5, // 5 requests per user per day
-      100, // 100 total requests per day across all users
-    )
+    // ------------------------------------------------------------------
+    //  Skip rate-limiting when not in production OR when explicitly disabled
+    // ------------------------------------------------------------------
+    const isProd = process.env.NODE_ENV === "production"
+    const disableLimit = process.env.DISABLE_POLLEN_RATE_LIMIT === "true"
 
-    if (!rateLimit.success) {
-      return NextResponse.json(
-        {
-          error: rateLimit.error,
-          rateLimitInfo: {
-            limit: rateLimit.limit,
-            remaining: rateLimit.remaining,
-            reset: rateLimit.reset,
-          },
-        },
-        {
-          status: 429,
-          headers: {
-            ...headers,
-            "X-RateLimit-Limit": rateLimit.limit.toString(),
-            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-            "X-RateLimit-Reset": rateLimit.reset.toString(),
-          },
-        },
+    let rateLimit = {
+      success: true,
+      limit: 0,
+      remaining: 0,
+      reset: 0,
+    } as const
+
+    if (isProd && !disableLimit) {
+      rateLimit = await rateLimiter.checkRateLimit(
+        request,
+        "pollen",
+        5, // 5 requests per IP per day in production
+        100, // 100 total/day across all users
       )
+      if (!rateLimit.success) {
+        return NextResponse.json(
+          {
+            error: rateLimit.error,
+            rateLimitInfo: {
+              limit: rateLimit.limit,
+              remaining: rateLimit.remaining,
+              reset: rateLimit.reset,
+            },
+          },
+          {
+            status: 429,
+            headers: {
+              ...headers,
+              "X-RateLimit-Limit": rateLimit.limit.toString(),
+              "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+              "X-RateLimit-Reset": rateLimit.reset.toString(),
+            },
+          },
+        )
+      }
     }
+
+    // const rateLimit = await rateLimiter.checkRateLimit(
+    //   request,
+    //   "pollen",
+    //   5, // 5 requests per user per day
+    //   100, // 100 total requests per day across all users
+    // )
+
+    // if (!rateLimit.success) {
+    //   return NextResponse.json(
+    //     {
+    //       error: rateLimit.error,
+    //       rateLimitInfo: {
+    //         limit: rateLimit.limit,
+    //         remaining: rateLimit.remaining,
+    //         reset: rateLimit.reset,
+    //       },
+    //     },
+    //     {
+    //       status: 429,
+    //       headers: {
+    //         ...headers,
+    //         "X-RateLimit-Limit": rateLimit.limit.toString(),
+    //         "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+    //         "X-RateLimit-Reset": rateLimit.reset.toString(),
+    //       },
+    //     },
+    //   )
+    // }
 
     const body = await request.json()
     const { lat, lng, enableMockData = false } = body
