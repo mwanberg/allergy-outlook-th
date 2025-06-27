@@ -108,10 +108,11 @@ class LocationCacheManager {
 
   getAllCachedLocations(): CachedLocation[] {
     const cache = this.getCache()
+    const now = new Date()
+
     return Object.values(cache).filter((location) => {
-      // Filter out expired locations
-      if (location.expiresAt && new Date() > new Date(location.expiresAt)) {
-        this.removeCachedLocation(location.lat, location.lng)
+      // Only filter out expired locations, don't remove them from storage yet
+      if (location.expiresAt && now > new Date(location.expiresAt)) {
         return false
       }
       return true
@@ -223,6 +224,25 @@ class LocationCacheManager {
   getLocationWithPollenData(lat: number, lng: number): CachedLocation | null {
     const location = this.getCachedLocation(lat, lng)
     return location?.pollenData ? location : null
+  }
+
+  // Add a separate method for cleanup
+  cleanupExpiredLocations(): void {
+    const cache = this.getCache()
+    const now = new Date()
+    let hasExpired = false
+
+    Object.keys(cache).forEach((key) => {
+      const location = cache[key]
+      if (location.expiresAt && now > new Date(location.expiresAt)) {
+        delete cache[key]
+        hasExpired = true
+      }
+    })
+
+    if (hasExpired) {
+      this.saveCache(cache)
+    }
   }
 }
 

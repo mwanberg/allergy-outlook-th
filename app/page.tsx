@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MapPin, Settings, Wind, Bug, Navigation, Search, AlertTriangle } from "lucide-react"
+import { MapPin, Settings, Wind, Bug, Search, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PollenAccordion } from "@/components/pollen-accordion"
 import { processPollenData, formatUPI } from "@/lib/pollen-utils"
@@ -23,13 +23,15 @@ export default function AirQualityApp() {
   const [searchValue, setSearchValue] = useState("")
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [isGettingLocation, setIsGettingLocation] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
 
   const [recentLocations, setRecentLocations] = useState<CachedLocation[]>([])
 
   // Load cached location on mount
   useEffect(() => {
+    // Clean up expired cache first
+    locationCache.cleanupExpiredLocations()
+
     // Load recent locations
     const recent = locationCache.getRecentLocations()
     setRecentLocations(recent)
@@ -37,13 +39,13 @@ export default function AirQualityApp() {
     // Get the most recent location with pollen data
     const mostRecent = locationCache.getMostRecentLocation()
     if (mostRecent && mostRecent.pollenData) {
+      console.log("Loading cached location:", mostRecent.name)
       setCurrentLocation(mostRecent)
       setPollenApiData(mostRecent.pollenData)
       setDataSource("cache")
+    } else {
+      console.log("No cached location found")
     }
-
-    // Clean up expired cache
-    locationCache.clearExpiredCache()
   }, [])
 
   // Load pollen data for current location
@@ -98,73 +100,6 @@ export default function AirQualityApp() {
     } finally {
       setIsLoadingPollen(false)
     }
-  }
-
-  const handleGeolocation = async () => {
-    if (!navigator.geolocation) {
-      setSearchError("Geolocation is not supported by your browser")
-      return
-    }
-
-    setIsGettingLocation(true)
-    setSearchError(null)
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords
-
-          // Reverse geocode to get location name
-          const response = await fetch("/api/reverse-geocode", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lat: latitude, lng: longitude }),
-          })
-
-          if (!response.ok) {
-            throw new Error("Failed to get location name")
-          }
-
-          const data = await response.json()
-
-          const newLocation: CachedLocation = {
-            name: data.name,
-            lat: latitude,
-            lng: longitude,
-          }
-
-          setCurrentLocation(newLocation)
-          locationCache.setCachedLocation(newLocation)
-          loadPollenData(latitude, longitude)
-        } catch (err) {
-          setSearchError("Failed to get your location name. Please try searching manually.")
-        } finally {
-          setIsGettingLocation(false)
-        }
-      },
-      (error) => {
-        setIsGettingLocation(false)
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            setSearchError("Location access denied. Please enable location permissions or search manually.")
-            break
-          case error.POSITION_UNAVAILABLE:
-            setSearchError("Location information unavailable. Please try searching manually.")
-            break
-          case error.TIMEOUT:
-            setSearchError("Location request timed out. Please try again or search manually.")
-            break
-          default:
-            setSearchError("An unknown error occurred. Please try searching manually.")
-            break
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 300000,
-      },
-    )
   }
 
   const handleSearch = async () => {
@@ -326,33 +261,9 @@ export default function AirQualityApp() {
                 </div>
               )}
 
-              {/* Browser Location Option */}
-              <div className="space-y-3">
-                <Button
-                  onClick={handleGeolocation}
-                  disabled={isGettingLocation}
-                  className="w-full bg-transparent"
-                  variant="outline"
-                >
-                  <Navigation className="w-4 h-4 mr-2" />
-                  {isGettingLocation ? "Getting Location..." : "Use My Current Location"}
-                </Button>
-                <p className="text-xs text-gray-500 text-center">
-                  We'll use your device's location to find pollen data for your area
-                </p>
-              </div>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-2 text-gray-500">Or search manually</span>
-                </div>
-              </div>
-
               {/* Manual Search */}
               <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-700 text-center">Search for your location:</h3>
                 <div className="flex gap-2">
                   <Input
                     placeholder="Enter city, address, or zip code..."
