@@ -28,10 +28,33 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
   const [isGettingLocation, setIsGettingLocation] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dailyUsage, setDailyUsage] = useState({ searches: 0, pollenRequests: 0 })
+  const [geolocationStatus, setGeolocationStatus] = useState<string>("unknown")
+
+  // Check geolocation availability on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (!navigator.geolocation) {
+        setGeolocationStatus("not_supported")
+      } else {
+        // Test if we can access geolocation
+        navigator.permissions
+          ?.query({ name: "geolocation" })
+          .then((result) => {
+            setGeolocationStatus(result.state)
+            console.log("🌍 Geolocation permission status:", result.state)
+          })
+          .catch(() => {
+            setGeolocationStatus("unknown")
+          })
+      }
+    }
+  }, [])
 
   // Load daily usage from localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window === "undefined") return
+
+    try {
       const today = new Date().toDateString()
       const stored = localStorage.getItem("airbuddy-daily-usage")
       if (stored) {
@@ -45,6 +68,8 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
           setDailyUsage(newUsage)
         }
       }
+    } catch (error) {
+      console.error("Failed to load daily usage:", error)
     }
   }, [])
 
@@ -73,10 +98,40 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
     setIsGettingLocation(true)
     setError(null)
 
+    console.log("🌍 Requesting geolocation...")
+
+    // First, let's check if we have permission
+    if (navigator.permissions) {
+      try {
+        const permission = await navigator.permissions.query({ name: "geolocation" })
+        console.log("🌍 Current permission state:", permission.state)
+
+        if (permission.state === "denied") {
+          setError(
+            "Location access is blocked. Please enable location permissions in your browser settings and refresh the page.",
+          )
+          setIsGettingLocation(false)
+          return
+        }
+      } catch (permError) {
+        console.log("🌍 Could not check permissions:", permError)
+      }
+    }
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 15000, // Increased timeout
+      maximumAge: 300000, // 5 minutes
+    }
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        console.log("🌍 Got position:", position.coords)
+
         try {
           const { latitude, longitude } = position.coords
+
+          console.log("🌍 Reverse geocoding coordinates:", { latitude, longitude })
 
           // Reverse geocode to get location name
           const response = await fetch("/api/reverse-geocode", {
@@ -85,11 +140,17 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
             body: JSON.stringify({ lat: latitude, lng: longitude }),
           })
 
+          console.log("🌍 Reverse geocode response status:", response.status)
+
           if (!response.ok) {
-            throw new Error("Failed to get location name")
+            const errorData = await response.json()
+            console.error("🌍 Reverse geocode error:", errorData)
+            throw new Error(errorData.error || "Failed to get location name")
           }
 
           const data = await response.json()
+          console.log("🌍 Reverse geocode result:", data)
+
           updateDailyUsage("pollenRequests")
 
           onLocationSelect({
@@ -99,16 +160,21 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
           })
           onClose()
         } catch (err) {
+          console.error("🌍 Error processing location:", err)
           setError("Failed to get your location name. Please try searching manually.")
         } finally {
           setIsGettingLocation(false)
         }
       },
       (error) => {
+        console.error("🌍 Geolocation error:", error)
         setIsGettingLocation(false)
+
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            setError("Location access denied. Please enable location permissions or search manually.")
+            setError(
+              "Location access denied. Please enable location permissions in your browser settings and try again.",
+            )
             break
           case error.POSITION_UNAVAILABLE:
             setError("Location information unavailable. Please try searching manually.")
@@ -117,15 +183,11 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
             setError("Location request timed out. Please try again or search manually.")
             break
           default:
-            setError("An unknown error occurred. Please try searching manually.")
+            setError(`Location error (${error.code}): ${error.message}. Please try searching manually.`)
             break
         }
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000, // 5 minutes
-      },
+      options,
     )
   }
 
@@ -139,6 +201,8 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
     setIsSearching(true)
     setError(null)
 
+    console.log("🔍 Searching for:", searchValue.trim())
+
     try {
       const response = await fetch("/api/geocode", {
         method: "POST",
@@ -146,18 +210,30 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
         body: JSON.stringify({ query: searchValue.trim() }),
       })
 
+      console.log("🔍 Geocode response status:", response.status)
+
       if (!response.ok) {
-        throw new Error("Search failed")
+        const errorData = await response.json()
+        console.error("🔍 Geocode error:", errorData)
+        throw new Error(errorData.error || "Search failed")
       }
 
       const data = await response.json()
+      console.log("🔍 Geocode result:", data)
+
       setSuggestions(data.suggestions || [])
       updateDailyUsage("searches")
 
       if (data.suggestions?.length === 0) {
         setError("No locations found. Try a different search term.")
       }
+
+      // Show warning if we got preview data
+      if (data.warning) {
+        setError(`API Warning: ${data.warning}. Showing preview data.`)
+      }
     } catch (err) {
+      console.error("🔍 Search error:", err)
       setError("Search failed. Please try again.")
       setSuggestions([])
     } finally {
@@ -171,6 +247,7 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
       return
     }
 
+    console.log("📍 Selected location:", location)
     updateDailyUsage("pollenRequests")
     onLocationSelect(location)
     onClose()
@@ -194,6 +271,22 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
           <div className="text-sm text-gray-600">
             Current: <span className="font-medium">{currentLocation}</span>
           </div>
+
+          {/* Geolocation Status */}
+          {geolocationStatus !== "unknown" && (
+            <div className="bg-blue-50 rounded-lg p-3 text-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <Navigation className="w-4 h-4 text-blue-600" />
+                <span className="font-medium text-blue-800">Location Status</span>
+              </div>
+              <div className="text-blue-700">
+                {geolocationStatus === "granted" && "✅ Location access granted"}
+                {geolocationStatus === "denied" && "❌ Location access denied"}
+                {geolocationStatus === "prompt" && "❓ Location access will be requested"}
+                {geolocationStatus === "not_supported" && "❌ Geolocation not supported"}
+              </div>
+            </div>
+          )}
 
           {/* Usage Limits Display */}
           <div className="bg-blue-50 rounded-lg p-3 text-sm">
@@ -222,17 +315,22 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
           <div className="space-y-3">
             <Button
               onClick={handleGeolocation}
-              disabled={isGettingLocation || dailyUsage.pollenRequests >= 5}
+              disabled={isGettingLocation || dailyUsage.pollenRequests >= 5 || geolocationStatus === "denied"}
               className="w-full"
               variant="outline"
             >
               <Navigation className="w-4 h-4 mr-2" />
               {isGettingLocation ? "Getting Location..." : "Use My Current Location"}
             </Button>
-            <p className="text-xs text-gray-500">
-              <strong>Note:</strong> Using a VPN may result in an inaccurate location. For best results, disable your
-              VPN or search manually below.
-            </p>
+            <div className="text-xs text-gray-500 space-y-1">
+              <p>
+                <strong>Note:</strong> Using a VPN may result in an inaccurate location.
+              </p>
+              <p>
+                <strong>Tip:</strong> If location access is denied, check your browser's location settings (usually in
+                the address bar or browser settings).
+              </p>
+            </div>
           </div>
 
           <div className="relative">
@@ -263,6 +361,18 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
               </Button>
             </div>
 
+            {/* Search Help */}
+            <div className="text-xs text-gray-500">
+              <p>
+                <strong>Search examples:</strong>
+              </p>
+              <ul className="list-disc list-inside mt-1 space-y-1">
+                <li>City: "Portland, OR" or "Portland, Oregon"</li>
+                <li>ZIP code: "97230" or "97230, USA"</li>
+                <li>Address: "123 Main St, Portland, OR"</li>
+              </ul>
+            </div>
+
             {/* Search Results */}
             {suggestions.length > 0 && (
               <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -275,11 +385,20 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
                     className={cn(
                       "w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition-colors",
                       dailyUsage.pollenRequests >= 5 && "opacity-50 cursor-not-allowed",
+                      suggestion.name.includes("(preview)") && "border-orange-200 bg-orange-50",
                     )}
                   >
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-sm">{suggestion.name}</span>
+                      <div>
+                        <span className="text-sm">{suggestion.name}</span>
+                        {suggestion.name.includes("(preview)") && (
+                          <p className="text-xs text-orange-600 mt-1">Preview mode - API key may not be configured</p>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          Lat: {suggestion.lat.toFixed(4)}, Lng: {suggestion.lng.toFixed(4)}
+                        </p>
+                      </div>
                     </div>
                   </button>
                 ))}

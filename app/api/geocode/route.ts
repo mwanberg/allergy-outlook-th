@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { rateLimiter } from "@/lib/rate-limiter"
 
 // Input validation
 function validateGeocodingInput(query: string): { isValid: boolean; error?: string } {
@@ -34,42 +33,15 @@ export async function POST(request: NextRequest) {
       "Access-Control-Allow-Headers": "Content-Type",
     }
 
-    // ============= SERVER-SIDE RATE LIMITING =============
-    const rateLimit = await rateLimiter.checkRateLimit(
-      request,
-      "geocode",
-      10, // 10 requests per user per day
-      200, // 200 total requests per day across all users
-    )
-
-    if (!rateLimit.success) {
-      return NextResponse.json(
-        {
-          error: rateLimit.error,
-          rateLimitInfo: {
-            limit: rateLimit.limit,
-            remaining: rateLimit.remaining,
-            reset: rateLimit.reset,
-          },
-        },
-        {
-          status: 429,
-          headers: {
-            ...headers,
-            "X-RateLimit-Limit": rateLimit.limit.toString(),
-            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-            "X-RateLimit-Reset": rateLimit.reset.toString(),
-          },
-        },
-      )
-    }
-
     const body = await request.json()
     const { query } = body
+
+    console.log("🔍 Geocoding request for:", query)
 
     // Validate input
     const validation = validateGeocodingInput(query)
     if (!validation.isValid) {
+      console.error("❌ Invalid query:", validation.error)
       return NextResponse.json({ error: validation.error }, { status: 400, headers })
     }
 
@@ -77,21 +49,15 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.GOOGLE_MAPS_API_KEY
 
     if (!apiKey) {
-      console.warn("GOOGLE_MAPS_API_KEY missing – returning mock geocode data so the preview keeps working.")
+      console.warn("⚠️ GOOGLE_MAPS_API_KEY missing – returning mock geocode data")
 
       // Echo the input back as a fake location centred on 0,0
       return NextResponse.json(
         {
           suggestions: [{ name: query + " (preview)", lat: 0, lng: 0 }],
+          warning: "API key not configured",
         },
-        {
-          headers: {
-            ...headers,
-            "X-RateLimit-Limit": rateLimit.limit.toString(),
-            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-            "X-RateLimit-Reset": rateLimit.reset.toString(),
-          },
-        },
+        { headers },
       )
     }
 
@@ -99,24 +65,43 @@ export async function POST(request: NextRequest) {
     const googleUrl = "https://maps.googleapis.com/maps/api/geocode/json"
     const params = new URLSearchParams({
       address: query,
-      key: process.env.GOOGLE_MAPS_API_KEY,
+      key: apiKey,
     })
 
-    const response = await fetch(`${googleUrl}?${params}`, {
+    const fullUrl = `${googleUrl}?${params}`
+    console.log("📤 Making request to Google Geocoding API")
+    console.log("📤 Query being sent:", query)
+
+    const response = await fetch(fullUrl, {
       method: "GET",
       headers: {
         "User-Agent": "AirBuddy/1.0",
       },
     })
 
+    console.log("📥 Google API response status:", response.status)
+
     if (!response.ok) {
+      console.error("❌ Google API HTTP error:", response.status)
       throw new Error(`Google Maps API error: ${response.status}`)
     }
 
     const data = await response.json()
+    console.log("📥 Google API response status field:", data.status)
+    console.log("📥 Google API results count:", data.results?.length || 0)
+
+    // Log first result for debugging
+    if (data.results && data.results.length > 0) {
+      console.log("📥 First result:", {
+        formatted_address: data.results[0].formatted_address,
+        location: data.results[0].geometry?.location,
+      })
+    }
 
     // --- handle Google JSON status ---------------------------------
     if (data.status !== "OK") {
+      console.warn("⚠️ Google API returned non-OK status:", data.status)
+
       // If the key is restricted / API disabled we get REQUEST_DENIED.
       // For preview we emit mock data instead of throwing.
       if (
@@ -133,34 +118,18 @@ export async function POST(request: NextRequest) {
             suggestions: [{ name: query + " (preview)", lat: 0, lng: 0 }],
             warning: data.error_message ?? data.status,
           },
-          {
-            headers: {
-              ...headers,
-              "X-RateLimit-Limit": rateLimit.limit.toString(),
-              "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-              "X-RateLimit-Reset": rateLimit.reset.toString(),
-            },
-          },
+          { headers },
         )
       }
 
       // ZERO_RESULTS is a normal case – just return empty list.
       if (data.status === "ZERO_RESULTS") {
-        return NextResponse.json(
-          { suggestions: [] },
-          {
-            headers: {
-              ...headers,
-              "X-RateLimit-Limit": rateLimit.limit.toString(),
-              "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-              "X-RateLimit-Reset": rateLimit.reset.toString(),
-            },
-          },
-        )
+        console.log("ℹ️ No results found for query:", query)
+        return NextResponse.json({ suggestions: [] }, { headers })
       }
 
       // Any other unexpected status → error
-      throw new Error(`Google Maps API error: ${data.status}`)
+      throw new Error(`Google Maps API error: ${data.status} - ${data.error_message || "Unknown error"}`)
     }
 
     // Transform Google Maps response to our format
@@ -171,19 +140,14 @@ export async function POST(request: NextRequest) {
         lng: result.geometry.location.lng,
       })) || []
 
-    return NextResponse.json(
-      { suggestions },
-      {
-        headers: {
-          ...headers,
-          "X-RateLimit-Limit": rateLimit.limit.toString(),
-          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-          "X-RateLimit-Reset": rateLimit.reset.toString(),
-        },
-      },
-    )
+    console.log("✅ Successfully processed", suggestions.length, "suggestions")
+    suggestions.forEach((suggestion, index) => {
+      console.log(`  ${index + 1}. ${suggestion.name} (${suggestion.lat}, ${suggestion.lng})`)
+    })
+
+    return NextResponse.json({ suggestions }, { headers })
   } catch (error) {
-    console.error("Geocoding error:", error)
+    console.error("🚨 Geocoding error:", error)
     return NextResponse.json({ error: "Failed to search locations" }, { status: 500 })
   }
 }

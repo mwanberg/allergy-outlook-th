@@ -48,12 +48,22 @@ export async function POST(request: NextRequest) {
     console.log("📥 Response headers:", Object.fromEntries(response.headers.entries()))
 
     const responseText = await response.text()
-    console.log("📥 Raw response:", responseText)
+    console.log("📥 Raw response length:", responseText.length)
+    console.log("📥 Raw response preview:", responseText.substring(0, 500))
 
     let parsedData
     try {
       parsedData = JSON.parse(responseText)
       console.log("✅ Successfully parsed JSON response")
+
+      // Log key parts of the structure
+      if (parsedData.dailyInfo) {
+        console.log("📊 Daily info entries:", parsedData.dailyInfo.length)
+        if (parsedData.dailyInfo[0]) {
+          console.log("📊 First day pollen types:", parsedData.dailyInfo[0].pollenTypeInfo?.length || 0)
+          console.log("📊 First day plants:", parsedData.dailyInfo[0].plantInfo?.length || 0)
+        }
+      }
     } catch (parseError) {
       console.error("❌ Failed to parse JSON:", parseError)
       return NextResponse.json({
@@ -61,7 +71,7 @@ export async function POST(request: NextRequest) {
         debug: {
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
-          rawResponse: responseText,
+          rawResponse: responseText.substring(0, 1000), // First 1000 chars
           parseError: parseError.message,
         },
       })
@@ -74,6 +84,7 @@ export async function POST(request: NextRequest) {
         headers: Object.fromEntries(response.headers.entries()),
         hasApiKey: true,
         requestSent: requestBody,
+        responseSize: responseText.length,
       },
       data: parsedData,
     })
