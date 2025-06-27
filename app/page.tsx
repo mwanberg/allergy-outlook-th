@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, Settings, Wind, Bug, AlertTriangle } from "lucide-react"
+import { MapPin, Settings, Wind, Bug, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PollenAccordion } from "@/components/pollen-accordion"
 import { processPollenData, formatUPI } from "@/lib/pollen-utils"
@@ -24,7 +24,7 @@ export default function AirQualityApp() {
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
   const [isLoadingPollen, setIsLoadingPollen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showEnvironmentWarning, setShowEnvironmentWarning] = useState(true)
+  const [dataSource, setDataSource] = useState<string | null>(null)
 
   // Load cached location on mount
   useEffect(() => {
@@ -76,6 +76,10 @@ export default function AirQualityApp() {
 
       const data = await response.json()
       setPollenApiData(data)
+
+      // Check data source from headers
+      const source = response.headers.get("X-Pollen-Data-Source")
+      setDataSource(source)
 
       // Update cache with pollen data
       locationCache.updatePollenData(lat, lng, data)
@@ -145,6 +149,7 @@ export default function AirQualityApp() {
   // Process pollen data using utility functions
   const processedPollenData = pollenApiData ? processPollenData(pollenApiData) : null
   const dateFromAPI = pollenApiData?.dailyInfo?.[0]?.date
+  const isMockData = pollenApiData?._mockData === true
 
   return (
     <>
@@ -170,34 +175,21 @@ export default function AirQualityApp() {
             </div>
           </div>
 
-          {/* Environment Warning */}
-          {showEnvironmentWarning && (
-            <Card className="border-blue-200 bg-blue-50">
+          {/* Data Source Info */}
+          {isMockData && (
+            <Card className="border-amber-200 bg-amber-50">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="font-semibold text-blue-800 mb-1">Preview Mode</h3>
-                    <p className="text-sm text-blue-700 mb-3">
-                      You're viewing this in the v0 preview environment. The Google Maps API integration will work once
-                      you deploy to Vercel with your API key configured.
+                    <h3 className="font-semibold text-amber-800 mb-1">Using Seasonal Estimates</h3>
+                    <p className="text-sm text-amber-700 mb-2">
+                      The Google Pollen API isn't publicly available yet, so we're showing seasonal pollen estimates
+                      based on your location and the current time of year.
                     </p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="bg-transparent text-blue-700 border-blue-300">
-                        <Link href="/debug" className="flex items-center gap-1">
-                          <Bug className="w-3 h-3" />
-                          Debug Panel
-                        </Link>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowEnvironmentWarning(false)}
-                        className="text-blue-600"
-                      >
-                        Dismiss
-                      </Button>
-                    </div>
+                    <p className="text-xs text-amber-600">
+                      Data is generated using typical seasonal patterns for {currentLocation.name}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -247,7 +239,9 @@ export default function AirQualityApp() {
                     {processedPollenData.totalCategory}
                   </span>
                 </div>
-                <p className="text-gray-600 text-sm mt-3">Today's pollen levels for your area</p>
+                <p className="text-gray-600 text-sm mt-3">
+                  {isMockData ? "Seasonal estimate" : "Today's pollen levels"} for your area
+                </p>
               </CardContent>
             </Card>
           )}
@@ -265,6 +259,11 @@ export default function AirQualityApp() {
                 <span className="font-medium text-gray-800">{currentLocation.name}</span>
               </div>
               {dateFromAPI && <p className="text-xs text-gray-500 mt-1">Updated {formatDate(dateFromAPI)}</p>}
+              {dataSource && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Source: {dataSource === "google-api" ? "Google Pollen API" : "Seasonal estimates"}
+                </p>
+              )}
             </CardContent>
           </Card>
 
