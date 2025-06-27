@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, Settings, Wind } from "lucide-react"
+import { MapPin, Settings, Wind, Bug, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PollenAccordion } from "@/components/pollen-accordion"
 import { processPollenData, formatUPI } from "@/lib/pollen-utils"
@@ -24,6 +24,7 @@ export default function AirQualityApp() {
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
   const [isLoadingPollen, setIsLoadingPollen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showEnvironmentWarning, setShowEnvironmentWarning] = useState(true)
 
   // Load cached location on mount
   useEffect(() => {
@@ -157,10 +158,51 @@ export default function AirQualityApp() {
               </div>
               <h1 className="text-xl font-bold text-gray-800">AirBuddy</h1>
             </div>
-            <Button variant="ghost" size="sm" className="rounded-full">
-              <Settings className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="rounded-full">
+                <Settings className="w-4 h-4" />
+              </Button>
+              <Link href="/debug">
+                <Button variant="ghost" size="sm" className="rounded-full">
+                  <Bug className="w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
           </div>
+
+          {/* Environment Warning */}
+          {showEnvironmentWarning && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-blue-800 mb-1">Preview Mode</h3>
+                    <p className="text-sm text-blue-700 mb-3">
+                      You're viewing this in the v0 preview environment. The Google Maps API integration will work once
+                      you deploy to Vercel with your API key configured.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="bg-transparent text-blue-700 border-blue-300">
+                        <Link href="/debug" className="flex items-center gap-1">
+                          <Bug className="w-3 h-3" />
+                          Debug Panel
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowEnvironmentWarning(false)}
+                        className="text-blue-600"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Error Display */}
           {error && (
