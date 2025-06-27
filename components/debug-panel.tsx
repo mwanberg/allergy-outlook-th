@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Bug, MapPin, Flower2 } from "lucide-react"
+import { Bug, MapPin, Flower2, AlertTriangle, ExternalLink } from "lucide-react"
 
 export function DebugPanel() {
   const [pollenLat, setPollenLat] = useState("37.7749")
@@ -59,6 +59,82 @@ export function DebugPanel() {
 
   return (
     <div className="space-y-6">
+      {/* Environment Status */}
+      <Card className="border-amber-200 bg-amber-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-amber-800">
+            <AlertTriangle className="w-5 h-5" />
+            Environment Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-white rounded-lg p-4 border border-amber-200">
+            <h3 className="font-semibold text-amber-800 mb-2">API Key Configuration</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                <span className="text-gray-700">GOOGLE_MAPS_API_KEY: Not found</span>
+              </div>
+              <p className="text-amber-700 bg-amber-100 p-3 rounded-lg">
+                <strong>This is expected in the v0 preview environment!</strong> The API key you've configured in your
+                Vercel project won't be available here. The app will work properly once deployed to Vercel.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+            <h3 className="font-semibold text-blue-800 mb-2">Next Steps</h3>
+            <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700">
+              <li>Deploy this code to your Vercel project</li>
+              <li>Ensure your Google Maps API key is set in Vercel environment variables</li>
+              <li>Enable the required APIs in Google Cloud Console:</li>
+              <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                <li>Maps JavaScript API</li>
+                <li>Geocoding API</li>
+                <li>Pollen API (if available in your region)</li>
+              </ul>
+              <li>Test the deployed version</li>
+            </ol>
+          </div>
+
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <h3 className="font-semibold text-green-800 mb-2">Google Cloud Console Setup</h3>
+            <div className="space-y-2 text-sm text-green-700">
+              <p>Make sure your API key has these APIs enabled:</p>
+              <div className="grid grid-cols-1 gap-2 mt-2">
+                <a
+                  href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Maps JavaScript API</span>
+                </a>
+                <a
+                  href="https://console.cloud.google.com/apis/library/geocoding-backend.googleapis.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Geocoding API</span>
+                </a>
+                <a
+                  href="https://console.cloud.google.com/apis/library/pollen.googleapis.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-2 bg-white rounded border hover:bg-gray-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Pollen API</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="border-orange-200 bg-orange-50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-orange-800">
@@ -67,6 +143,13 @@ export function DebugPanel() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          <div className="bg-orange-100 rounded-lg p-3 border border-orange-200">
+            <p className="text-sm text-orange-800">
+              <strong>Note:</strong> These tests will show "API key not found" in the v0 preview. They'll work once
+              deployed to Vercel with proper environment variables.
+            </p>
+          </div>
+
           {/* Pollen API Test */}
           <div className="space-y-3">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
