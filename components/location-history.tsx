@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { MapPin, Clock, Flower2, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatUPI } from "@/lib/pollen-utils"
@@ -66,12 +65,21 @@ export function LocationHistory({
 
   const formatLastUpdated = (dateString: string) => {
     const date = new Date(dateString)
-    const now = new Date()
-    const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-
-    // if (diffHours < 1) return "Just now"
-    // if (diffHours < 24) return `${diffHours}h ago`
-    return date.toLocaleDateString()
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ]
+    return `${monthNames[date.getMonth()]}, ${date.getDate()} ${date.getFullYear()}`
   }
 
   // Filter out current location from recent locations
@@ -132,9 +140,14 @@ export function LocationHistory({
                         <span className="text-sm font-medium text-gray-700">
                           {formatUPI(pollenSummary.totalUPI)} UPI
                         </span>
-                        <Badge className={cn("text-xs", getPollenLevelColor(pollenSummary.category))}>
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full border font-semibold border-transparent text-xs px-2 py-1 pointer-events-none",
+                            getPollenLevelColor(pollenSummary.category),
+                          )}
+                        >
                           {pollenSummary.category}
-                        </Badge>
+                        </span>
                       </div>
                     </div>
 

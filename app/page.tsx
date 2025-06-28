@@ -11,14 +11,7 @@ import { processPollenData, formatUPI } from "@/lib/pollen-utils"
 import { locationCache, type CachedLocation } from "@/lib/location-cache"
 import Link from "next/link"
 import { LocationHistory } from "@/components/location-history"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function AirQualityApp() {
   const [currentLocation, setCurrentLocation] = useState<CachedLocation | null>(null)
@@ -158,7 +151,7 @@ export default function AirQualityApp() {
     setPollenApiData(null) // Clear current data while loading
     setSuggestions([]) // Clear search results
     setSearchValue("") // Clear search input
-    setIsDialogOpen(false)
+    setIsDialogOpen(false) // Close the dialog
 
     // Check if we have cached pollen data for this location
     const cachedLocation = locationCache.getLocationWithPollenData(location.lat, location.lng)
@@ -402,75 +395,20 @@ export default function AirQualityApp() {
           </Card>
         )}
 
+        {/* Pollen Breakdown with Accordions */}
+        {processedPollenData && !isLoadingPollen && (
+          <PollenAccordion pollenTypes={processedPollenData.pollenTypes} plants={processedPollenData.plants} />
+        )}
+
         {/* Location */}
         <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm cursor-pointer hover:shadow-xl transition-shadow">
-          <CardContent className="p-4">
+          <CardContent className="p-4" onClick={() => setIsDialogOpen(true)}>
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-gray-500" />
               <span className="font-medium text-gray-800">{currentLocation.name}</span>
             </div>
             {dateFromAPI && <p className="text-xs text-gray-500 mt-1">Updated {formatDate(dateFromAPI)}</p>}
-            <Dialog>
-              <DialogTrigger asChild>
-                <p className="text-xs text-blue-600 mt-1">Tap to change location</p>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Change Location</DialogTitle>
-                  <DialogDescription>Search for a new location to get pollen data.</DialogDescription>
-                </DialogHeader>
-                {/* Location Search */}
-                <div className="space-y-3">
-                  {/* Error Display */}
-                  {searchError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                      <p className="text-sm text-red-800">{searchError}</p>
-                    </div>
-                  )}
-
-                  {/* Manual Search */}
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium text-gray-700 text-center">Search for your location:</h3>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Enter city, address, or zip code..."
-                        value={searchValue}
-                        onChange={(e) => setSearchValue(e.target.value)}
-                        onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-                        disabled={isSearching}
-                      />
-                      <Button onClick={handleSearch} disabled={isSearching || !searchValue.trim()} size="sm">
-                        <Search className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    {/* Search Results */}
-                    {suggestions.length > 0 && (
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        <p className="text-sm font-medium text-gray-700">Select a location:</p>
-                        {suggestions.map((suggestion, index) => (
-                          <button
-                            key={index}
-                            onClick={() => handleLocationSelect(suggestion)}
-                            className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <div>
-                                <span className="text-sm">{suggestion.name}</span>
-                                <p className="text-xs text-gray-500">
-                                  Lat: {suggestion.lat.toFixed(4)}, Lng: {suggestion.lng.toFixed(4)}
-                                </p>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <p className="text-xs text-blue-600 mt-1">Tap to change location</p>
           </CardContent>
         </Card>
 
@@ -481,11 +419,6 @@ export default function AirQualityApp() {
             currentLocation={currentLocation}
             onLocationSelect={handleRecentLocationSelect}
           />
-        )}
-
-        {/* Pollen Breakdown with Accordions */}
-        {processedPollenData && !isLoadingPollen && (
-          <PollenAccordion pollenTypes={processedPollenData.pollenTypes} plants={processedPollenData.plants} />
         )}
 
         {/* Footer Links */}
@@ -500,6 +433,66 @@ export default function AirQualityApp() {
           </div>
           <div className="text-xs text-gray-500">Stay healthy and breathe easy! {pollenIcon}</div>
         </div>
+
+        {/* Location Change Dialog */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="sm:max-w-[425px] animate-in fade-in-0 duration-200">
+            <DialogHeader>
+              <DialogTitle>Change Location</DialogTitle>
+              <DialogDescription>Search for a new location to get pollen data.</DialogDescription>
+            </DialogHeader>
+            {/* Location Search */}
+            <div className="space-y-3">
+              {/* Error Display */}
+              {searchError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-800">{searchError}</p>
+                </div>
+              )}
+
+              {/* Manual Search */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-700 text-center">Search for your location:</h3>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter city, address, or zip code..."
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+                    disabled={isSearching}
+                  />
+                  <Button onClick={handleSearch} disabled={isSearching || !searchValue.trim()} size="sm">
+                    <Search className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Search Results */}
+                {suggestions.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <p className="text-sm font-medium text-gray-700">Select a location:</p>
+                    {suggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleLocationSelect(suggestion)}
+                        className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <div>
+                            <span className="text-sm">{suggestion.name}</span>
+                            <p className="text-xs text-gray-500">
+                              Lat: {suggestion.lat.toFixed(4)}, Lng: {suggestion.lng.toFixed(4)}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

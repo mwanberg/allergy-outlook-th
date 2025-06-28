@@ -15,6 +15,7 @@ interface PollenAccordionProps {
 
 export function PollenAccordion({ pollenTypes, plants }: PollenAccordionProps) {
   const [selectedImage, setSelectedImage] = useState<{ url: string; title: string } | null>(null)
+  const [imageLoading, setImageLoading] = useState(false)
 
   const getPollenLevelColor = (level: string) => {
     switch (level.toLowerCase()) {
@@ -86,7 +87,7 @@ export function PollenAccordion({ pollenTypes, plants }: PollenAccordionProps) {
 
     return (
       <div
-        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in-0 duration-200"
         onClick={() => setSelectedImage(null)}
       >
         <div className="bg-white rounded-xl max-w-sm w-full max-h-[80vh] overflow-hidden">
@@ -97,11 +98,29 @@ export function PollenAccordion({ pollenTypes, plants }: PollenAccordionProps) {
             </Button>
           </div>
           <div className="p-4">
-            <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
-              <div className="text-center text-gray-500">
+            <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center relative overflow-hidden">
+              {imageLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                  <p className="text-sm text-gray-500">Image loading...</p>
+                </div>
+              )}
+              <img
+                src={selectedImage.url || "/placeholder.svg"}
+                alt={selectedImage.title}
+                className="object-cover w-full h-full"
+                onLoad={() => setImageLoading(false)}
+                onLoadStart={() => setImageLoading(true)}
+                onError={(e: any) => {
+                  setImageLoading(false)
+                  e.target.style.display = "none"
+                  const fallback = e.target.parentNode.querySelector(".fallback")
+                  if (fallback) fallback.style.display = "flex"
+                }}
+              />
+              <div className="fallback absolute inset-0 flex-col items-center justify-center text-gray-500 hidden">
                 <div className="text-4xl mb-2">🌿</div>
                 <p className="text-sm">{selectedImage.title}</p>
-                <p className="text-xs mt-1">Image would load here</p>
+                <p className="text-xs mt-1">Image unavailable</p>
               </div>
             </div>
           </div>
@@ -224,127 +243,148 @@ export function PollenAccordion({ pollenTypes, plants }: PollenAccordionProps) {
                               Plant Species ({plantsForType.length})
                             </h4>
                             <div className="space-y-3">
-                              {plantsForType.map((plant) => (
-                                <div key={plant.code} className="bg-white rounded-lg p-4 border border-stone-100">
-                                  <div className="flex items-start justify-between mb-3">
-                                    <div>
-                                      <h5 className="font-semibold text-gray-800 flex items-center gap-2">
-                                        {plant.displayName}
-                                        {plant.inSeason && <div className="w-2 h-2 bg-green-500 rounded-full"></div>}
-                                      </h5>
-                                      {plant.plantDescription && (
-                                        <p className="text-sm text-gray-600 mt-1">{plant.plantDescription.family}</p>
+                              {plantsForType.map((plant) => {
+                                const hasMainPicture = plant.plantDescription?.picture
+                                const hasCloseupPicture = plant.plantDescription?.pictureCloseup
+                                const totalImages = (hasMainPicture ? 1 : 0) + (hasCloseupPicture ? 1 : 0)
+
+                                return (
+                                  <div key={plant.code} className="bg-white rounded-lg p-4 border border-stone-100">
+                                    <div className="flex items-start justify-between mb-3">
+                                      <div>
+                                        <h5 className="font-semibold text-gray-800 flex items-center gap-2">
+                                          {plant.displayName}
+                                          {plant.inSeason && <div className="w-2 h-2 bg-green-500 rounded-full"></div>}
+                                        </h5>
+                                        {plant.plantDescription && (
+                                          <p className="text-sm text-gray-600 mt-1">{plant.plantDescription.family}</p>
+                                        )}
+                                      </div>
+                                      {plant.indexInfo && (
+                                        <div
+                                          className={cn(
+                                            "inline-flex items-center rounded-full border font-semibold border-transparent text-xs px-2 py-1",
+                                            getPollenLevelColor(plant.indexInfo.category),
+                                          )}
+                                        >
+                                          {plant.indexInfo.category}
+                                        </div>
                                       )}
                                     </div>
-                                    {plant.indexInfo && (
-                                      <div
-                                        className={cn(
-                                          "inline-flex items-center rounded-full border font-semibold border-transparent text-xs px-2 py-1",
-                                          getPollenLevelColor(plant.indexInfo.category),
-                                        )}
-                                      >
-                                        {plant.indexInfo.category}
-                                      </div>
-                                    )}
-                                  </div>
 
-                                  {plant.plantDescription && (
-                                    <div className="space-y-3">
-                                      {/* Season */}
-                                      <div className="flex items-start gap-2">
-                                        <Calendar className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                          <span className="text-sm font-medium text-gray-700">Season: </span>
-                                          <span className="text-sm text-gray-600">{plant.plantDescription.season}</span>
-                                        </div>
-                                      </div>
-
-                                      {/* Special Colors */}
-                                      {plant.plantDescription.specialColors !== "None" && (
+                                    {plant.plantDescription && (
+                                      <div className="space-y-3">
+                                        {/* Season */}
                                         <div className="flex items-start gap-2">
-                                          <Palette className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                                          <Calendar className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
                                           <div>
-                                            <span className="text-sm font-medium text-gray-700">Colors: </span>
+                                            <span className="text-sm font-medium text-gray-700">Season: </span>
                                             <span className="text-sm text-gray-600">
-                                              {plant.plantDescription.specialColors}
+                                              {plant.plantDescription.season}
                                             </span>
                                           </div>
                                         </div>
-                                      )}
 
-                                      {/* Special Shapes */}
-                                      <div className="flex items-start gap-2">
-                                        <Shapes className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                          <span className="text-sm font-medium text-gray-700">Shape: </span>
-                                          <span className="text-sm text-gray-600">
-                                            {plant.plantDescription.specialShapes}
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      {/* Cross Reactions */}
-                                      <div className="flex items-start gap-2">
-                                        <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                          <span className="text-sm font-medium text-gray-700">Cross-reactions: </span>
-                                          <span className="text-sm text-gray-600">
-                                            {plant.plantDescription.crossReaction}
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      {/* Plant Images */}
-                                      {(plant.plantDescription.picture || plant.plantDescription.pictureCloseup) && (
-                                        <div className="grid grid-cols-2 gap-2 mt-3">
-                                          {plant.plantDescription.picture && (
-                                            <div
-                                              className="relative h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors"
-                                              onClick={() =>
-                                                setSelectedImage({
-                                                  url: plant.plantDescription!.picture!,
-                                                  title: `${plant.displayName} - Plant View`,
-                                                })
-                                              }
-                                            >
-                                              <img
-                                                src={plant.plantDescription.picture || "/placeholder.svg"}
-                                                alt={`${plant.displayName} - Plant View`}
-                                                className="object-cover w-full h-full"
-                                                onError={(e: any) => {
-                                                  e.target.onerror = null
-                                                  e.target.src = "/placeholder-image.png" // Replace with your placeholder image
-                                                }}
-                                              />
+                                        {/* Special Colors */}
+                                        {plant.plantDescription.specialColors !== "None" && (
+                                          <div className="flex items-start gap-2">
+                                            <Palette className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                                            <div>
+                                              <span className="text-sm font-medium text-gray-700">Colors: </span>
+                                              <span className="text-sm text-gray-600">
+                                                {plant.plantDescription.specialColors}
+                                              </span>
                                             </div>
-                                          )}
-                                          {plant.plantDescription.pictureCloseup && (
-                                            <div
-                                              className="relative h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors"
-                                              onClick={() =>
-                                                setSelectedImage({
-                                                  url: plant.plantDescription!.pictureCloseup!,
-                                                  title: `${plant.displayName} - Close-up`,
-                                                })
-                                              }
-                                            >
-                                              <img
-                                                src={plant.plantDescription.pictureCloseup || "/placeholder.svg"}
-                                                alt={`${plant.displayName} - Close-up`}
-                                                className="object-cover w-full h-full"
-                                                onError={(e: any) => {
-                                                  e.target.onerror = null
-                                                  e.target.src = "/placeholder-image.png" // Replace with your placeholder image
-                                                }}
-                                              />
-                                            </div>
-                                          )}
+                                          </div>
+                                        )}
+
+                                        {/* Special Shapes */}
+                                        <div className="flex items-start gap-2">
+                                          <Shapes className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <span className="text-sm font-medium text-gray-700">Shape: </span>
+                                            <span className="text-sm text-gray-600">
+                                              {plant.plantDescription.specialShapes}
+                                            </span>
+                                          </div>
                                         </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
+
+                                        {/* Cross Reactions */}
+                                        <div className="flex items-start gap-2">
+                                          <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <span className="text-sm font-medium text-gray-700">Cross-reactions: </span>
+                                            <span className="text-sm text-gray-600">
+                                              {plant.plantDescription.crossReaction}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        {/* Plant Images */}
+                                        {totalImages > 0 && (
+                                          <div
+                                            className={cn(
+                                              "mt-3",
+                                              totalImages === 1 ? "flex justify-center" : "grid grid-cols-2 gap-2",
+                                            )}
+                                          >
+                                            {hasMainPicture && (
+                                              <div
+                                                className="relative h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors"
+                                                onClick={() =>
+                                                  setSelectedImage({
+                                                    url: plant.plantDescription!.picture!,
+                                                    title: `${plant.displayName} - Plant View`,
+                                                  })
+                                                }
+                                              >
+                                                <img
+                                                  src={plant.plantDescription.picture || "/placeholder.svg"}
+                                                  alt={`${plant.displayName} - Plant View`}
+                                                  className="object-cover w-full h-full"
+                                                  onError={(e: any) => {
+                                                    e.target.style.display = "none"
+                                                    const fallback = e.target.parentNode.querySelector(".fallback")
+                                                    if (fallback) fallback.style.display = "flex"
+                                                  }}
+                                                />
+                                                <div className="fallback absolute inset-0 flex-col items-center justify-center text-xs text-gray-500 hidden">
+                                                  🌿 Plant View
+                                                </div>
+                                              </div>
+                                            )}
+                                            {hasCloseupPicture && (
+                                              <div
+                                                className="relative h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors"
+                                                onClick={() =>
+                                                  setSelectedImage({
+                                                    url: plant.plantDescription!.pictureCloseup!,
+                                                    title: `${plant.displayName} - Close-up`,
+                                                  })
+                                                }
+                                              >
+                                                <img
+                                                  src={plant.plantDescription.pictureCloseup || "/placeholder.svg"}
+                                                  alt={`${plant.displayName} - Close-up`}
+                                                  className="object-cover w-full h-full"
+                                                  onError={(e: any) => {
+                                                    e.target.style.display = "none"
+                                                    const fallback = e.target.parentNode.querySelector(".fallback")
+                                                    if (fallback) fallback.style.display = "flex"
+                                                  }}
+                                                />
+                                                <div className="fallback absolute inset-0 flex-col items-center justify-center text-xs text-gray-500 hidden">
+                                                  🔍 Close-up
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
                             </div>
                           </div>
                         )}
