@@ -69,8 +69,8 @@ export function LocationHistory({
     const now = new Date()
     const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
 
-    if (diffHours < 1) return "Just now"
-    if (diffHours < 24) return `${diffHours}h ago`
+    // if (diffHours < 1) return "Just now"
+    // if (diffHours < 24) return `${diffHours}h ago`
     return date.toLocaleDateString()
   }
 
@@ -87,22 +87,28 @@ export function LocationHistory({
   return (
     <Card className={cn("border-0 shadow-lg bg-white/80 backdrop-blur-sm", className)}>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-lg">
+        <button onClick={() => setIsExpanded(!isExpanded)} className="w-full flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-lg font-normal">
             <Clock className="w-5 h-5 text-blue-600" />
             Recent Locations
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => setIsExpanded(!isExpanded)} className="rounded-full">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsExpanded(!isExpanded)
+            }}
+            className="rounded-full"
+          >
             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </Button>
-        </div>
+        </button>
       </CardHeader>
 
       {isExpanded && (
         <CardContent className="space-y-3">
-          <p className="text-sm text-gray-600 mb-3">
-            Tap any location to view its cached pollen data (no API calls needed)
-          </p>
+          <p className="text-sm text-gray-600 mb-3">Tap any location to view its cached pollen data.</p>
 
           {otherLocations.map((location, index) => {
             const pollenSummary = getPollenSummary(location)

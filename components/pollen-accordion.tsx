@@ -295,21 +295,29 @@ export function PollenAccordion({ pollenTypes, plants }: PollenAccordionProps) {
                                       </div>
 
                                       {/* Plant Images */}
-                                      {plant.plantDescription.picture && (
+                                      {(plant.plantDescription.picture || plant.plantDescription.pictureCloseup) && (
                                         <div className="grid grid-cols-2 gap-2 mt-3">
-                                          <div
-                                            className="relative h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors"
-                                            onClick={() =>
-                                              setSelectedImage({
-                                                url: plant.plantDescription!.picture!,
-                                                title: `${plant.displayName} - Plant View`,
-                                              })
-                                            }
-                                          >
-                                            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500">
-                                              🌿 Plant View
+                                          {plant.plantDescription.picture && (
+                                            <div
+                                              className="relative h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors"
+                                              onClick={() =>
+                                                setSelectedImage({
+                                                  url: plant.plantDescription!.picture!,
+                                                  title: `${plant.displayName} - Plant View`,
+                                                })
+                                              }
+                                            >
+                                              <img
+                                                src={plant.plantDescription.picture || "/placeholder.svg"}
+                                                alt={`${plant.displayName} - Plant View`}
+                                                className="object-cover w-full h-full"
+                                                onError={(e: any) => {
+                                                  e.target.onerror = null
+                                                  e.target.src = "/placeholder-image.png" // Replace with your placeholder image
+                                                }}
+                                              />
                                             </div>
-                                          </div>
+                                          )}
                                           {plant.plantDescription.pictureCloseup && (
                                             <div
                                               className="relative h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors"
@@ -320,9 +328,15 @@ export function PollenAccordion({ pollenTypes, plants }: PollenAccordionProps) {
                                                 })
                                               }
                                             >
-                                              <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500">
-                                                🔍 Close-up
-                                              </div>
+                                              <img
+                                                src={plant.plantDescription.pictureCloseup || "/placeholder.svg"}
+                                                alt={`${plant.displayName} - Close-up`}
+                                                className="object-cover w-full h-full"
+                                                onError={(e: any) => {
+                                                  e.target.onerror = null
+                                                  e.target.src = "/placeholder-image.png" // Replace with your placeholder image
+                                                }}
+                                              />
                                             </div>
                                           )}
                                         </div>
