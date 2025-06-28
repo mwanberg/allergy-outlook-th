@@ -1,47 +1,53 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, Settings, Wind, Bug, AlertTriangle } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { MapPin, Wind, Bug, Search, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PollenAccordion } from "@/components/pollen-accordion"
 import { processPollenData, formatUPI } from "@/lib/pollen-utils"
-import { LocationPickerModal } from "@/components/location-picker-modal"
 import { locationCache, type CachedLocation } from "@/lib/location-cache"
 import Link from "next/link"
-
-// Default location for initial load
-const DEFAULT_LOCATION = {
-  name: "San Francisco, CA",
-  lat: 37.7749,
-  lng: -122.4194,
-}
+import { LocationHistory } from "@/components/location-history"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function AirQualityApp() {
-  const [currentLocation, setCurrentLocation] = useState<CachedLocation>(DEFAULT_LOCATION)
+  const [currentLocation, setCurrentLocation] = useState<CachedLocation | null>(null)
   const [pollenApiData, setPollenApiData] = useState<any>(null)
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
   const [isLoadingPollen, setIsLoadingPollen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showEnvironmentWarning, setShowEnvironmentWarning] = useState(true)
+  const [dataSource, setDataSource] = useState<string | null>(null)
+
+  // Location search state
+  const [searchValue, setSearchValue] = useState("")
+  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+
+  const [recentLocations, setRecentLocations] = useState<CachedLocation[]>([])
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   // Load cached location on mount
   useEffect(() => {
-    const cachedLocations = locationCache.getAllCachedLocations()
-    if (cachedLocations.length > 0) {
-      // Use the most recently updated location
-      const mostRecent = cachedLocations.sort(
-        (a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime(),
-      )[0]
-      setCurrentLocation(mostRecent)
-      if (mostRecent.pollenData) {
-        setPollenApiData(mostRecent.pollenData)
-      }
-    }
+    // Clean up expired cache first
+    locationCache.cleanupExpiredLocations()
 
-    // Clean up expired cache
-    locationCache.clearExpiredCache()
+    // Load recent locations
+    const recent = locationCache.getRecentLocations()
+    setRecentLocations(recent)
+
+    // Get the most recent location with pollen data
+    const mostRecent = locationCache.getMostRecentLocation()
+    if (mostRecent && mostRecent.pollenData) {
+      console.log("Loading cached location:", mostRecent.name)
+      setCurrentLocation(mostRecent)
+      setPollenApiData(mostRecent.pollenData)
+      setDataSource("cache")
+    } else {
+      console.log("No cached location found")
+    }
   }, [])
 
   // Load pollen data for current location
@@ -77,13 +83,60 @@ export default function AirQualityApp() {
       const data = await response.json()
       setPollenApiData(data)
 
+      // Check data source from headers
+      const source = response.headers.get("X-Pollen-Data-Source")
+      setDataSource(source)
+
       // Update cache with pollen data
       locationCache.updatePollenData(lat, lng, data)
+
+      // Get the updated location with pollen data and add to recent locations
+      const updatedLocation = locationCache.getCachedLocation(lat, lng)
+      if (updatedLocation) {
+        locationCache.addToRecentLocations(updatedLocation)
+        setRecentLocations(locationCache.getRecentLocations())
+      }
     } catch (err) {
       console.error("Failed to load pollen data:", err)
       setError(err instanceof Error ? err.message : "Failed to load pollen data")
     } finally {
       setIsLoadingPollen(false)
+    }
+  }
+
+  const handleSearch = async () => {
+    if (!searchValue.trim()) return
+
+    setIsSearching(true)
+    setSearchError(null)
+
+    try {
+      const response = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: searchValue.trim() }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Search failed")
+      }
+
+      const data = await response.json()
+      setSuggestions(data.suggestions || [])
+
+      if (data.suggestions?.length === 0) {
+        setSearchError("No locations found. Try a different search term.")
+      }
+
+      if (data.warning) {
+        setSearchError(`Warning: ${data.warning}`)
+      }
+    } catch (err) {
+      setSearchError("Search failed. Please try again.")
+      setSuggestions([])
+    } finally {
+      setIsSearching(false)
     }
   }
 
@@ -96,12 +149,36 @@ export default function AirQualityApp() {
 
     setCurrentLocation(newLocation)
     setPollenApiData(null) // Clear current data while loading
+    setSuggestions([]) // Clear search results
+    setSearchValue("") // Clear search input
+    setIsDialogOpen(false) // Close the dialog
 
-    // Cache the location
-    locationCache.setCachedLocation(newLocation)
+    // Check if we have cached pollen data for this location
+    const cachedLocation = locationCache.getLocationWithPollenData(location.lat, location.lng)
+    if (cachedLocation && cachedLocation.pollenData) {
+      // Use cached data
+      setPollenApiData(cachedLocation.pollenData)
+      setDataSource("cache")
+      setCurrentLocation(cachedLocation)
 
-    // Load pollen data
-    loadPollenData(location.lat, location.lng)
+      // Update recent locations
+      locationCache.addToRecentLocations(cachedLocation)
+      setRecentLocations(locationCache.getRecentLocations())
+    } else {
+      // Cache the location and load fresh pollen data
+      locationCache.setCachedLocation(newLocation)
+      loadPollenData(location.lat, location.lng)
+    }
+  }
+
+  const handleRecentLocationSelect = (location: CachedLocation) => {
+    setCurrentLocation(location)
+    setPollenApiData(location.pollenData)
+    setDataSource("cache")
+
+    // Move to front of recent locations
+    locationCache.addToRecentLocations(location)
+    setRecentLocations(locationCache.getRecentLocations())
   }
 
   const getPollenLevelColor = (level: string) => {
@@ -146,8 +223,20 @@ export default function AirQualityApp() {
   const processedPollenData = pollenApiData ? processPollenData(pollenApiData) : null
   const dateFromAPI = pollenApiData?.dailyInfo?.[0]?.date
 
-  return (
-    <>
+  const pollenIconMap: { [key: string]: string } = {
+    None: "🌿",
+    "Very Low": "🍃",
+    Low: "🌾",
+    Moderate: "🌬️",
+    High: "🤧",
+    "Very High": "🌫️",
+  }
+
+  const pollenIcon = processedPollenData ? pollenIconMap[processedPollenData.totalCategory] || "🌸" : "🌸"
+
+  // Show location setup if no location is set
+  if (!currentLocation) {
+    return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-green-50 to-stone-50 p-4">
         <div className="max-w-md mx-auto space-y-6">
           {/* Header */}
@@ -158,138 +247,253 @@ export default function AirQualityApp() {
               </div>
               <h1 className="text-xl font-bold text-gray-800">AirBuddy</h1>
             </div>
-            <div className="flex items-center gap-2">
+            <Link href="/debug">
               <Button variant="ghost" size="sm" className="rounded-full">
-                <Settings className="w-4 h-4" />
+                <Bug className="w-4 h-4" />
               </Button>
-              <Link href="/debug">
-                <Button variant="ghost" size="sm" className="rounded-full">
-                  <Bug className="w-4 h-4" />
-                </Button>
-              </Link>
-            </div>
+            </Link>
           </div>
 
-          {/* Environment Warning */}
-          {showEnvironmentWarning && (
-            <Card className="border-blue-200 bg-blue-50">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-blue-800 mb-1">Preview Mode</h3>
-                    <p className="text-sm text-blue-700 mb-3">
-                      You're viewing this in the v0 preview environment. The Google Maps API integration will work once
-                      you deploy to Vercel with your API key configured.
-                    </p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="bg-transparent text-blue-700 border-blue-300">
-                        <Link href="/debug" className="flex items-center gap-1">
-                          <Bug className="w-3 h-3" />
-                          Debug Panel
-                        </Link>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowEnvironmentWarning(false)}
-                        className="text-blue-600"
-                      >
-                        Dismiss
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Error Display */}
-          {error && (
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="p-4">
-                <p className="text-sm text-red-800">{error}</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 bg-transparent"
-                  onClick={() => loadPollenData(currentLocation.lat, currentLocation.lng)}
-                >
-                  Try Again
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Loading State */}
-          {isLoadingPollen && (
-            <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm overflow-hidden">
-              <CardContent className="p-6 text-center">
-                <div className="text-6xl mb-4 animate-pulse">🌸</div>
-                <div className="text-lg font-medium text-gray-600">Loading pollen data...</div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Main Pollen Information */}
-          {processedPollenData && !isLoadingPollen && (
-            <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm overflow-hidden">
-              <CardContent className="p-6 text-center">
-                <div className="text-8xl mb-4">🌸</div>
-                <div className="text-2xl font-bold text-gray-800 mb-2">
-                  Pollen count: {formatUPI(processedPollenData.totalUPI)} UPI{" "}
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full border font-semibold border-transparent text-sm px-3 py-1 ml-2",
-                      getPollenLevelColor(processedPollenData.totalCategory),
-                    )}
-                  >
-                    {processedPollenData.totalCategory}
-                  </span>
-                </div>
-                <p className="text-gray-600 text-sm mt-3">Today's pollen levels for your area</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Pollen Breakdown with Accordions */}
-          {processedPollenData && !isLoadingPollen && (
-            <PollenAccordion pollenTypes={processedPollenData.pollenTypes} plants={processedPollenData.plants} />
-          )}
-
-          {/* Location */}
-          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm cursor-pointer hover:shadow-xl transition-shadow">
-            <CardContent className="p-4" onClick={() => setIsLocationModalOpen(true)}>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-gray-500" />
-                <span className="font-medium text-gray-800">{currentLocation.name}</span>
+          {/* Location Setup */}
+          <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-center text-gray-800">Welcome to AirBuddy!</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🌸</div>
+                <p className="text-gray-600 mb-6">
+                  To get started, we need to know your location so we can provide accurate pollen information for your
+                  area.
+                </p>
               </div>
-              {dateFromAPI && <p className="text-xs text-gray-500 mt-1">Updated {formatDate(dateFromAPI)}</p>}
+
+              {/* Error Display */}
+              {searchError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-800">{searchError}</p>
+                </div>
+              )}
+
+              {/* Manual Search */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-700 text-center">Search for your location:</h3>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter city, address, or zip code..."
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+                    disabled={isSearching}
+                  />
+                  <Button onClick={handleSearch} disabled={isSearching || !searchValue.trim()} size="sm">
+                    <Search className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Search Results */}
+                {suggestions.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <p className="text-sm font-medium text-gray-700">Select a location:</p>
+                    {suggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleLocationSelect(suggestion)}
+                        className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <div>
+                            <span className="text-sm">{suggestion.name}</span>
+                            <p className="text-xs text-gray-500">
+                              Lat: {suggestion.lat.toFixed(4)}, Lng: {suggestion.lng.toFixed(4)}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
-
-          {/* Footer Links */}
-          <div className="text-center space-y-2 pb-4">
-            <div className="flex justify-center gap-4 text-xs">
-              <Link href="/privacy" className="text-gray-500 hover:text-gray-700 underline">
-                Privacy Policy
-              </Link>
-              <Link href="/how-it-works" className="text-gray-500 hover:text-gray-700 underline">
-                How This App Works
-              </Link>
-            </div>
-            <div className="text-xs text-gray-500">Stay healthy and breathe easy! 🌸</div>
-          </div>
         </div>
       </div>
+    )
+  }
 
-      {/* Location Picker Modal */}
-      <LocationPickerModal
-        isOpen={isLocationModalOpen}
-        onClose={() => setIsLocationModalOpen(false)}
-        onLocationSelect={handleLocationSelect}
-        currentLocation={currentLocation.name}
-      />
-    </>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-green-50 to-stone-50 p-4">
+      <div className="max-w-md mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between pt-4">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-gradient-to-r from-amber-400 to-orange-400 rounded-full flex items-center justify-center">
+              <Wind className="w-6 h-6 text-white" />
+            </div>
+            <h1 className="text-xl font-bold text-gray-800">AirBuddy</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/debug">
+              <Button variant="ghost" size="sm" className="rounded-full">
+                <Bug className="w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Error Display */}
+        {error && (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm text-red-800">{error}</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 bg-transparent"
+                    onClick={() => loadPollenData(currentLocation.lat, currentLocation.lng)}
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Loading State */}
+        {isLoadingPollen && (
+          <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm overflow-hidden">
+            <CardContent className="p-6 text-center">
+              <div className="text-6xl mb-4 animate-pulse">{pollenIcon}</div>
+              <div className="text-lg font-medium text-gray-600">Loading pollen data...</div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Main Pollen Information */}
+        {processedPollenData && !isLoadingPollen && (
+          <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm overflow-hidden">
+            <CardContent className="p-6 text-center">
+              <div className="text-8xl mb-4">{pollenIcon}</div>
+              <div className="text-2xl font-bold text-gray-800 mb-2">
+                Pollen count: {formatUPI(processedPollenData.totalUPI)} UPI{" "}
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border font-semibold border-transparent text-sm px-3 py-1 ml-2",
+                    getPollenLevelColor(processedPollenData.totalCategory),
+                  )}
+                >
+                  {processedPollenData.totalCategory}
+                </span>
+              </div>
+              <p className="text-gray-600 text-sm mt-3">Today's pollen levels for your area</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pollen Breakdown with Accordions */}
+        {processedPollenData && !isLoadingPollen && (
+          <PollenAccordion pollenTypes={processedPollenData.pollenTypes} plants={processedPollenData.plants} />
+        )}
+
+        {/* Location */}
+        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm cursor-pointer hover:shadow-xl transition-shadow">
+          <CardContent className="p-4" onClick={() => setIsDialogOpen(true)}>
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-500" />
+              <span className="font-medium text-gray-800">{currentLocation.name}</span>
+            </div>
+            {dateFromAPI && <p className="text-xs text-gray-500 mt-1">Updated {formatDate(dateFromAPI)}</p>}
+            <p className="text-xs text-blue-600 mt-1">Tap to change location</p>
+          </CardContent>
+        </Card>
+
+        {/* Location History */}
+        {recentLocations.length > 0 && (
+          <LocationHistory
+            recentLocations={recentLocations}
+            currentLocation={currentLocation}
+            onLocationSelect={handleRecentLocationSelect}
+          />
+        )}
+
+        {/* Footer Links */}
+        <div className="text-center space-y-2 pb-4">
+          <div className="flex justify-center gap-4 text-xs">
+            <Link href="/privacy" className="text-gray-500 hover:text-gray-700 underline">
+              Privacy Policy
+            </Link>
+            <Link href="/how-it-works" className="text-gray-500 hover:text-gray-700 underline">
+              How This App Works
+            </Link>
+          </div>
+          <div className="text-xs text-gray-500">Stay healthy and breathe easy! {pollenIcon}</div>
+        </div>
+
+        {/* Location Change Dialog */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="sm:max-w-[425px] animate-in fade-in-0 duration-200">
+            <DialogHeader>
+              <DialogTitle>Change Location</DialogTitle>
+              <DialogDescription>Search for a new location to get pollen data.</DialogDescription>
+            </DialogHeader>
+            {/* Location Search */}
+            <div className="space-y-3">
+              {/* Error Display */}
+              {searchError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-800">{searchError}</p>
+                </div>
+              )}
+
+              {/* Manual Search */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-700 text-center">Search for your location:</h3>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter city, address, or zip code..."
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+                    disabled={isSearching}
+                  />
+                  <Button onClick={handleSearch} disabled={isSearching || !searchValue.trim()} size="sm">
+                    <Search className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Search Results */}
+                {suggestions.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <p className="text-sm font-medium text-gray-700">Select a location:</p>
+                    {suggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleLocationSelect(suggestion)}
+                        className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <div>
+                            <span className="text-sm">{suggestion.name}</span>
+                            <p className="text-xs text-gray-500">
+                              Lat: {suggestion.lat.toFixed(4)}, Lng: {suggestion.lng.toFixed(4)}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
   )
 }

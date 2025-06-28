@@ -13,6 +13,7 @@ interface LocationPickerModalProps {
   onClose: () => void
   onLocationSelect: (location: { name: string; lat: number; lng: number }) => void
   currentLocation: string
+  isChangingLocation?: boolean // Added prop
 }
 
 interface LocationSuggestion {
@@ -21,7 +22,13 @@ interface LocationSuggestion {
   lng: number
 }
 
-export function LocationPickerModal({ isOpen, onClose, onLocationSelect, currentLocation }: LocationPickerModalProps) {
+export function LocationPickerModal({
+  isOpen,
+  onClose,
+  onLocationSelect,
+  currentLocation,
+  isChangingLocation = false, // Added prop with default value
+}: LocationPickerModalProps) {
   const [searchValue, setSearchValue] = useState("")
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -260,7 +267,7 @@ export function LocationPickerModal({ isOpen, onClose, onLocationSelect, current
       <Card className="w-full max-w-md max-h-[90vh] overflow-hidden">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Choose Location</CardTitle>
+            <CardTitle className="text-lg">{isChangingLocation ? "Change Location" : "Choose Location"}</CardTitle>
             <Button variant="ghost" size="sm" onClick={onClose} className="rounded-full">
               <X className="w-4 h-4" />
             </Button>

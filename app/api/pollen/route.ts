@@ -18,149 +18,6 @@ function validateCoordinates(lat: number, lng: number): { isValid: boolean; erro
   return { isValid: true }
 }
 
-// Mock data based on your original Google Maps Pollen API structure
-const getMockPollenData = () => ({
-  regionCode: "US",
-  dailyInfo: [
-    {
-      date: {
-        year: 2025,
-        month: 6,
-        day: 27,
-      },
-      pollenTypeInfo: [
-        {
-          code: "GRASS",
-          displayName: "Grass",
-          inSeason: true,
-          indexInfo: {
-            code: "UPI",
-            displayName: "Universal Pollen Index",
-            value: 2,
-            category: "Low",
-            indexDescription: "People with high allergy to pollen are likely to experience symptoms",
-            color: {
-              red: 0.5176471,
-              green: 0.8117647,
-              blue: 0.2,
-            },
-          },
-          healthRecommendations: [
-            "It's a good day for outdoor activities since pollen levels are low.",
-            "Do you know which plants cause your pollen allergy? Check out the pollen data to be prepared.",
-          ],
-        },
-        {
-          code: "TREE",
-          displayName: "Tree",
-          inSeason: false,
-          indexInfo: {
-            code: "UPI",
-            displayName: "Universal Pollen Index",
-            value: 1,
-            category: "Very Low",
-            indexDescription: "Minimal pollen detected",
-            color: {
-              red: 0.2,
-              green: 0.6,
-              blue: 0.9,
-            },
-          },
-          healthRecommendations: ["Tree pollen levels are very low today.", "Great weather for outdoor activities!"],
-        },
-        {
-          code: "WEED",
-          displayName: "Weed",
-          inSeason: false,
-          indexInfo: {
-            code: "UPI",
-            displayName: "Universal Pollen Index",
-            value: 0,
-            category: "None",
-            indexDescription: "No pollen detected",
-            color: {
-              red: 0.5,
-              green: 0.5,
-              blue: 0.5,
-            },
-          },
-          healthRecommendations: ["No weed pollen detected today."],
-        },
-      ],
-      plantInfo: [
-        {
-          code: "MAPLE",
-          displayName: "Maple",
-        },
-        {
-          code: "ELM",
-          displayName: "Elm",
-        },
-        {
-          code: "COTTONWOOD",
-          displayName: "Cottonwood",
-        },
-        {
-          code: "ALDER",
-          displayName: "Alder",
-        },
-        {
-          code: "BIRCH",
-          displayName: "Birch",
-        },
-        {
-          code: "ASH",
-          displayName: "Ash",
-        },
-        {
-          code: "PINE",
-          displayName: "Pine",
-        },
-        {
-          code: "OAK",
-          displayName: "Oak",
-        },
-        {
-          code: "JUNIPER",
-          displayName: "Juniper",
-        },
-        {
-          code: "GRAMINALES",
-          displayName: "Grasses",
-          inSeason: true,
-          indexInfo: {
-            code: "UPI",
-            displayName: "Universal Pollen Index",
-            value: 2,
-            category: "Low",
-            indexDescription: "People with high allergy to pollen are likely to experience symptoms",
-            color: {
-              red: 0.5176471,
-              green: 0.8117647,
-              blue: 0.2,
-            },
-          },
-          plantDescription: {
-            type: "GRASS",
-            family: "Poaceae",
-            season: "Late spring, summer",
-            specialColors: "None",
-            specialShapes: "The leaves are alternate, long and narrow and the leaf margin is smooth.",
-            crossReaction:
-              "Plantain (Plantago) pollen. In addition, there may be a higher risk for food allergies like melons, oranges, tomatoes, peanuts, soy, potato, and other legumes.",
-            picture: "https://storage.googleapis.com/pollen-pictures/graminales_full.jpg",
-            pictureCloseup: "https://storage.googleapis.com/pollen-pictures/graminales_closeup.jpg",
-          },
-        },
-        {
-          code: "RAGWEED",
-          displayName: "Ragweed",
-        },
-      ],
-    },
-  ],
-})
-
 export async function POST(request: NextRequest) {
   try {
     // CORS headers
@@ -172,37 +29,82 @@ export async function POST(request: NextRequest) {
     }
 
     // ============= SERVER-SIDE RATE LIMITING =============
-    const rateLimit = await rateLimiter.checkRateLimit(
-      request,
-      "pollen",
-      5, // 5 requests per user per day
-      100, // 100 total requests per day across all users
-    )
+    // ------------------------------------------------------------------
+    //  Skip rate-limiting when not in production OR when explicitly disabled
+    // ------------------------------------------------------------------
+    const isProd = process.env.NODE_ENV === "production"
+    const disableLimit = process.env.DISABLE_POLLEN_RATE_LIMIT === "true"
 
-    if (!rateLimit.success) {
-      return NextResponse.json(
-        {
-          error: rateLimit.error,
-          rateLimitInfo: {
-            limit: rateLimit.limit,
-            remaining: rateLimit.remaining,
-            reset: rateLimit.reset,
-          },
-        },
-        {
-          status: 429,
-          headers: {
-            ...headers,
-            "X-RateLimit-Limit": rateLimit.limit.toString(),
-            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-            "X-RateLimit-Reset": rateLimit.reset.toString(),
-          },
-        },
+    let rateLimit = {
+      success: true,
+      limit: 0,
+      remaining: 0,
+      reset: 0,
+    } as const
+
+    if (isProd && !disableLimit) {
+      rateLimit = await rateLimiter.checkRateLimit(
+        request,
+        "pollen",
+        5, // 5 requests per IP per day in production
+        100, // 100 total/day across all users
       )
+      if (!rateLimit.success) {
+        return NextResponse.json(
+          {
+            error: rateLimit.error,
+            rateLimitInfo: {
+              limit: rateLimit.limit,
+              remaining: rateLimit.remaining,
+              reset: rateLimit.reset,
+            },
+          },
+          {
+            status: 429,
+            headers: {
+              ...headers,
+              "X-RateLimit-Limit": rateLimit.limit.toString(),
+              "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+              "X-RateLimit-Reset": rateLimit.reset.toString(),
+            },
+          },
+        )
+      }
     }
 
+    // const rateLimit = await rateLimiter.checkRateLimit(
+    //   request,
+    //   "pollen",
+    //   5, // 5 requests per user per day
+    //   100, // 100 total requests per day across all users
+    // )
+
+    // if (!rateLimit.success) {
+    //   return NextResponse.json(
+    //     {
+    //       error: rateLimit.error,
+    //       rateLimitInfo: {
+    //         limit: rateLimit.limit,
+    //         remaining: rateLimit.remaining,
+    //         reset: rateLimit.reset,
+    //       },
+    //     },
+    //     {
+    //       status: 429,
+    //       headers: {
+    //         ...headers,
+    //         "X-RateLimit-Limit": rateLimit.limit.toString(),
+    //         "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+    //         "X-RateLimit-Reset": rateLimit.reset.toString(),
+    //       },
+    //     },
+    //   )
+    // }
+
     const body = await request.json()
-    const { lat, lng } = body
+    const { lat, lng, enableMockData = false } = body
+
+    console.log("🌸 Pollen API request:", { lat, lng, enableMockData })
 
     // Validate input
     const validation = validateCoordinates(lat, lng)
@@ -210,76 +112,121 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400, headers })
     }
 
-    // --------------------------- KEY CHECK & FALLBACK ---------------------------
+    // Check for required environment variable
     const apiKey = process.env.GOOGLE_MAPS_API_KEY
 
     if (!apiKey) {
-      // In local/preview we don't have real secrets; respond with mock data
-      console.warn("GOOGLE_MAPS_API_KEY missing – returning mock pollen data so the preview keeps working.")
-      return NextResponse.json(getMockPollenData(), {
-        headers: {
-          ...headers,
-          "X-RateLimit-Limit": rateLimit.limit.toString(),
-          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-          "X-RateLimit-Reset": rateLimit.reset.toString(),
+      console.error("❌ GOOGLE_MAPS_API_KEY is not configured")
+      return NextResponse.json(
+        {
+          error: "Pollen service is temporarily unavailable. We're working on a fix.",
+          technical: "API key not configured",
         },
-      })
+        { status: 503, headers },
+      )
     }
 
-    // Make request to Google Maps Pollen API
-    const googleUrl = "https://pollen.googleapis.com/v1/forecast:lookup"
-    const requestBody = {
-      location: {
-        longitude: lng,
-        latitude: lat,
-      },
-      days: 1,
-      languageCode: "en",
-    }
+    console.log("✅ API Key found, constructing request...")
 
-    const response = await fetch(`${googleUrl}?key=${apiKey}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "AirBuddy/1.0",
-      },
-      body: JSON.stringify(requestBody),
+    // Construct the URL exactly as shown in Google's documentation
+    const baseUrl = "https://pollen.googleapis.com/v1/forecast:lookup"
+    const params = new URLSearchParams({
+      key: apiKey,
+      "location.latitude": lat.toString(),
+      "location.longitude": lng.toString(),
+      days: "1",
     })
 
-    /* ------------------------------------------------------------------
-       GRACEFUL 404 HANDLING
-       ------------------------------------------------------------------ */
-    if (response.status === 404) {
-      console.warn(
-        "Google Pollen API returned 404 – API may be disabled or not whitelisted. " +
-          "Returning mock data so the preview keeps working.",
-      )
-      return NextResponse.json(getMockPollenData(), {
-        headers: {
-          ...headers,
-          "X-RateLimit-Limit": rateLimit.limit.toString(),
-          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-          "X-RateLimit-Reset": rateLimit.reset.toString(),
-        },
-      })
-    }
+    const fullUrl = `${baseUrl}?${params.toString()}`
 
-    /* ------------------------------------------------------------------ */
+    // Log the URL structure (without the actual API key)
+    const safeUrl = fullUrl.replace(apiKey, "API_KEY_HIDDEN")
+    console.log("📤 Request URL structure:", safeUrl)
+    console.log("📤 Request method: GET")
+
+    const response = await fetch(fullUrl, {
+      method: "GET",
+      headers: {
+        "User-Agent": "AirBuddy/1.0",
+        Accept: "application/json",
+      },
+    })
+
+    console.log("📥 Response status:", response.status)
+    console.log("📥 Response headers:", Object.fromEntries(response.headers.entries()))
+
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error("Google Pollen API error:", response.status, errorText)
+      const responseText = await response.text()
+      console.error("❌ Google Pollen API error:", {
+        status: response.status,
+        statusText: response.statusText,
+        responsePreview: responseText.substring(0, 500),
+      })
 
-      if (response.status === 429) {
-        return NextResponse.json(
-          { error: "Google API limit reached. Please try again tomorrow." },
-          { status: 429, headers },
-        )
+      // Check if it's an HTML error page (404, 403, etc.)
+      if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html")) {
+        console.error("❌ Received HTML error page from Pollen API")
+
+        if (response.status === 404) {
+          return NextResponse.json(
+            {
+              error: "Pollen service is temporarily unavailable. We're working on a fix.",
+              technical: "API endpoint not found (404)",
+            },
+            { status: 503, headers },
+          )
+        }
+
+        if (response.status === 403) {
+          return NextResponse.json(
+            {
+              error: "Pollen service is temporarily unavailable. We're working on a fix.",
+              technical: "API access forbidden (403)",
+            },
+            { status: 503, headers },
+          )
+        }
       }
 
-      throw new Error(`Google Pollen API error: ${response.status}`)
+      if (response.status === 429) {
+        return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429, headers })
+      }
+
+      // For any other error, return a generic message
+      return NextResponse.json(
+        {
+          error: "Pollen service is temporarily unavailable. We're working on a fix.",
+          technical: `HTTP ${response.status}: ${response.statusText}`,
+        },
+        { status: 503, headers },
+      )
     }
 
-    const data = await response.json()
+    const responseText = await response.text()
+    console.log("📥 Raw response length:", responseText.length)
+    console.log("📥 Response preview:", responseText.substring(0, 200))
+
+    let data
+    try {
+      data = JSON.parse(responseText)
+      console.log("✅ Successfully parsed JSON response")
+      console.log("📊 Response structure:", {
+        hasRegionCode: !!data.regionCode,
+        hasDailyInfo: !!data.dailyInfo,
+        dailyInfoLength: data.dailyInfo?.length || 0,
+        firstDayPollenTypes: data.dailyInfo?.[0]?.pollenTypeInfo?.length || 0,
+        firstDayPlants: data.dailyInfo?.[0]?.plantInfo?.length || 0,
+      })
+    } catch (parseError) {
+      console.error("❌ Failed to parse JSON response:", parseError)
+      return NextResponse.json(
+        {
+          error: "Pollen service returned invalid data. We're working on a fix.",
+          technical: "JSON parse error",
+        },
+        { status: 503, headers },
+      )
+    }
 
     return NextResponse.json(data, {
       headers: {
@@ -287,11 +234,18 @@ export async function POST(request: NextRequest) {
         "X-RateLimit-Limit": rateLimit.limit.toString(),
         "X-RateLimit-Remaining": rateLimit.remaining.toString(),
         "X-RateLimit-Reset": rateLimit.reset.toString(),
+        "X-Pollen-Data-Source": "google-api",
       },
     })
   } catch (error) {
-    console.error("Pollen API error:", error)
-    return NextResponse.json({ error: "Failed to fetch pollen data" }, { status: 500 })
+    console.error("🚨 Pollen API error:", error)
+    return NextResponse.json(
+      {
+        error: "Pollen service is temporarily unavailable. We're working on a fix.",
+        technical: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 503 },
+    )
   }
 }
 
